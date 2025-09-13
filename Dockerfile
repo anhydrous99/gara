@@ -38,11 +38,9 @@ COPY . .
 RUN mkdir -p build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
-    make -j$(nproc) && \
-    chmod +x gara
+    make -j$(nproc) && make install
 
-COPY /app/build/gara /usr/local/bin/gara
-RUN chmod +x /usr/local/bin/gara
+#RUN chmod +x /usr/local/bin/gara
 
 RUN useradd -r -s /bin/false crowuser
 
