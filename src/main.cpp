@@ -7,7 +7,7 @@ int main() {
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([](){
-        return "Hello World from Crow on AWS!!";
+        return "Hello World from Crow on AWS!";
     });
 
     CROW_ROUTE(app, "/health")([]() {
