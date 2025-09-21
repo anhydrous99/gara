@@ -18,20 +18,21 @@ RUN git clone https://github.com/aws/aws-sdk-cpp.git  \
     && cd aws-sdk-cpp \
     && git submodule update --init --recursive \
     && mkdir build && cd build \
-    && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;secretsmanager" \
-    && make && make install && cd ../../ && rm -rf aws-sdk-cpp
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;secretsmanager" -DENABLE_TESTING=OFF \
+    && make -j$(nproc) && make install && cd ../../ && rm -rf aws-sdk-cpp
 
 
 RUN git clone https://github.com/CrowCpp/Crow.git \
     && cd Crow \
     && mkdir build && cd build \
     && cmake .. -DCROW_BUILD_EXAMPLES=OFF -DCROW_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release \
-    && make && make install && cd ../../ && rm -rf Crow
+    && make -j$(nproc) && make install && cd ../../ && rm -rf Crow
 
 
 RUN git clone https://github.com/pantor/inja.git \
     && cd inja && mkdir build && cd build \
-    && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DINJA_BUILD_TESTS=OFF -DCOVERALLS=OFF
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DINJA_BUILD_TESTS=OFF -DCOVERALLS=OFF \
+    && make -j$(nproc) && make install
 
 COPY . .
 
@@ -39,8 +40,6 @@ RUN mkdir -p build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc) && make install
-
-#RUN chmod +x /usr/local/bin/gara
 
 RUN useradd -r -s /bin/false crowuser
 

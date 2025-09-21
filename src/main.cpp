@@ -20,5 +20,6 @@ int main() {
     app
     .use_compression(crow::compression::GZIP)
     .port(port)
+    .loglevel(crow::LogLevel::Warning)
     .multithreaded().run();
 }
