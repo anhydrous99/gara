@@ -15,7 +15,7 @@ int main() {
     });
 
     char* port_env = std::getenv("PORT");
-    int port = port_env ? std::stoi(port_env) : 8080;
+    int port = port_env ? std::stoi(port_env) : 80;
 
     app
     .use_compression(crow::compression::GZIP)
