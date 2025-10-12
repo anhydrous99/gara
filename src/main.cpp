@@ -3,7 +3,7 @@
 #include <inja/inja.hpp>
 
 int main() {
-    // Startup App
+    // Startup App with compression middleware
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([](){
@@ -18,7 +18,6 @@ int main() {
     int port = port_env ? std::stoi(port_env) : 80;
 
     app
-    .use_compression(crow::compression::GZIP)
     .port(port)
     .loglevel(crow::LogLevel::Warning)
     .multithreaded().run();
