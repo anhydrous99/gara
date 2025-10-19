@@ -18,14 +18,20 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          libssl-dev \
-          zlib1g-dev \
-          cmake \
           build-essential \
+          cmake \
+          git \
           meson \
           ninja-build \
           pkg-config \
-          libglib2.0-dev
+          zlib1g-dev \
+          libssl-dev \
+          libcurl4-openssl-dev \
+          libjpeg-turbo-dev \
+          libpng-dev \
+          libwebp-dev \
+          libglib2.0-dev \
+          libgobject-2.0-dev
 
     - name: Configure CMake
       run: |
@@ -59,7 +65,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install openssl zlib cmake meson ninja pkg-config glib
+        brew install openssl zlib cmake meson ninja pkg-config glib jpeg libpng webp
 
     - name: Configure CMake
       run: |

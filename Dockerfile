@@ -1,16 +1,24 @@
-FROM ubuntu:latest
+# Builder stage
+FROM alpine:latest as builder
 
 WORKDIR /app
 
-# Install only system dependencies - CMake will fetch the rest
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# Install build dependencies
+RUN apk add --no-cache \
+    build-base \
     cmake \
     git \
-    zlib1g-dev \
-    libssl-dev \
-    libcurl4-openssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+    meson \
+    ninja \
+    pkgconfig \
+    zlib-dev \
+    openssl-dev \
+    curl-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libwebp-dev \
+    glib-dev \
+    gobject-introspection-dev
 
 COPY . .
 
@@ -19,7 +27,23 @@ RUN mkdir -p build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     make -j$(nproc) && make install
 
-RUN useradd -r -s /bin/false crowuser
+# Runtime stage
+FROM alpine:latest
+
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apk add --no-cache \
+    glib \
+    libcurl \
+    openssl \
+    zlib
+
+# Copy the built binary from builder stage
+COPY --from=builder /usr/local/bin/gara /usr/local/bin/gara
+
+# Create non-root user
+RUN addgroup -g 1000 crowuser && adduser -u 1000 -G crowuser -s /sbin/nologin -D crowuser
 
 USER crowuser
 
