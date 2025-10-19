@@ -27,11 +27,10 @@ jobs:
           zlib1g-dev \
           libssl-dev \
           libcurl4-openssl-dev \
-          libjpeg-turbo-dev \
+          libjpeg-dev \
           libpng-dev \
           libwebp-dev \
-          libglib2.0-dev \
-          libgobject-2.0-dev
+          libglib2.0-dev
 
     - name: Configure CMake
       run: |
