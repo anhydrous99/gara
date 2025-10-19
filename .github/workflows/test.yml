@@ -30,7 +30,9 @@ jobs:
           libjpeg-dev \
           libpng-dev \
           libwebp-dev \
-          libglib2.0-dev
+          libglib2.0-dev \
+          libexpat1-dev \
+          libgirepository1.0-dev
 
     - name: Configure CMake
       run: |
@@ -41,7 +43,7 @@ jobs:
     - name: Build
       run: |
         cd build
-        make -j$(nproc)
+        make -j$(nproc) VERBOSE=1
 
     - name: Run tests
       run: |

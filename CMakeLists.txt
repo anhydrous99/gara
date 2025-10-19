@@ -121,36 +121,31 @@ else()
 endif()
 
 # Build libvips with image format support
-# On macOS, these will link dynamically; on Linux, we'll try to link statically
-# For Linux static builds, we need to ensure the configure step doesn't fail
-set(VIPS_CONFIGURE_COMMAND meson setup --prefix=${VIPS_PREFIX}
-                      --buildtype=release
-                      --default-library=${MESON_DEFAULT_LIBRARY}
-                      ${MESON_PREFER_STATIC}
-                      -Dintrospection=disabled
-                      -Ddeprecated=false
-                      -Djpeg=enabled
-                      -Dpng=enabled
-                      -Dwebp=enabled
-                      <SOURCE_DIR> <BINARY_DIR>)
-
-# Add additional options for static builds on Linux
-if(BUILD_STATIC AND UNIX AND NOT APPLE)
-    set(VIPS_CONFIGURE_COMMAND ${VIPS_CONFIGURE_COMMAND} -Dcpp=true)
-endif()
-
+# Build C++ bindings explicitly
 ExternalProject_Add(
     libvips_external
     GIT_REPOSITORY https://github.com/libvips/libvips.git
     GIT_TAG v8.15.2
     PREFIX ${CMAKE_BINARY_DIR}/libvips
-    CONFIGURE_COMMAND ${VIPS_CONFIGURE_COMMAND}
+    CONFIGURE_COMMAND meson setup
+                      --prefix=${VIPS_PREFIX}
+                      --buildtype=release
+                      --default-library=${MESON_DEFAULT_LIBRARY}
+                      ${MESON_PREFER_STATIC}
+                      -Dintrospection=disabled
+                      -Ddeprecated=false
+                      -Dcpp=true
+                      -Djpeg=enabled
+                      -Dpng=enabled
+                      -Dwebp=enabled
+                      <SOURCE_DIR> <BINARY_DIR>
     BUILD_COMMAND meson compile -C <BINARY_DIR>
     INSTALL_COMMAND meson install -C <BINARY_DIR>
     BUILD_BYPRODUCTS ${VIPS_LIB} ${VIPS_CPP_LIB}
     LOG_CONFIGURE TRUE
     LOG_BUILD TRUE
     LOG_INSTALL TRUE
+    LOG_OUTPUT_ON_FAILURE TRUE
 )
 
 # Create imported targets for libvips and libvips-cpp
