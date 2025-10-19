@@ -1,0 +1,241 @@
+openapi: 3.0.0
+info:
+  title: Gara Image Service API
+  description: Upload and transform images on AWS S3 with caching
+  version: 1.0.0
+  contact:
+    name: Gara Image Service
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /:
+    get:
+      summary: Service information
+      description: Returns basic information about the Gara Image Service
+      responses:
+        '200':
+          description: Service information
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Gara Image Service - Upload and transform images on AWS"
+
+  /health:
+    get:
+      summary: Health check
+      description: Check if the service is running
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+
+  /api/images/health:
+    get:
+      summary: Detailed health check
+      description: Returns detailed health information including S3 bucket status
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  service:
+                    type: string
+                    example: "image-service"
+                  s3_bucket:
+                    type: string
+                    example: "gara-images"
+
+  /api/images/upload:
+    post:
+      summary: Upload an image
+      description: Upload an image file to S3. Returns a unique image ID for retrieval and transformation.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The image file to upload
+              required:
+                - file
+      responses:
+        '201':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  image_id:
+                    type: string
+                    description: SHA256 hash of the image (unique identifier)
+                    example: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+                  original_filename:
+                    type: string
+                    example: "photo.jpg"
+                  size:
+                    type: integer
+                    description: File size in bytes
+                    example: 1048576
+                  upload_timestamp:
+                    type: integer
+                    description: Unix timestamp
+                    example: 1699564800
+                  message:
+                    type: string
+                    example: "Image uploaded successfully"
+        '400':
+          description: Invalid request (no file, invalid format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Failed to extract file from request"
+                message: "Please upload a valid image file"
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "File too large"
+                message: "Maximum file size is 100MB"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/images/{image_id}:
+    get:
+      summary: Get or transform an image
+      description: Retrieve an image by ID with optional transformations. Returns a presigned S3 URL.
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          description: The unique image ID (SHA256 hash returned from upload)
+          schema:
+            type: string
+            example: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+        - name: format
+          in: query
+          required: false
+          description: Target image format
+          schema:
+            type: string
+            enum: [jpeg, jpg, png, gif, tiff, webp]
+            default: jpeg
+          example: "png"
+        - name: width
+          in: query
+          required: false
+          description: Target width in pixels (0 for original, max 10000)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+          example: 800
+        - name: height
+          in: query
+          required: false
+          description: Target height in pixels (0 for original, max 10000)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 10000
+            default: 0
+          example: 600
+      responses:
+        '200':
+          description: Image found and transformed (if requested)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  image_id:
+                    type: string
+                    example: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+                  format:
+                    type: string
+                    example: "jpeg"
+                  width:
+                    type: integer
+                    example: 800
+                  height:
+                    type: integer
+                    example: 600
+                  url:
+                    type: string
+                    format: uri
+                    description: Presigned S3 URL (valid for 1 hour)
+                    example: "https://gara-images.s3.amazonaws.com/transformed/...?X-Amz-Signature=..."
+                  expires_in:
+                    type: integer
+                    description: URL expiration time in seconds
+                    example: 3600
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Image not found or transformation failed"
+                  image_id:
+                    type: string
+                    example: "invalid_id"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error type
+        message:
+          type: string
+          description: Human-readable error message
+      required:
+        - error
+        - message
+
+tags:
+  - name: Images
+    description: Image upload and transformation operations
+  - name: Health
+    description: Service health checks

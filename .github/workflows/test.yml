@@ -1,0 +1,85 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libssl-dev \
+          zlib1g-dev \
+          cmake \
+          build-essential \
+          meson \
+          ninja-build \
+          pkg-config \
+          libglib2.0-dev
+
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Build
+      run: |
+        cd build
+        make -j$(nproc)
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: build/Testing/
+
+  test-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        brew install openssl zlib cmake meson ninja pkg-config glib
+
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Build
+      run: |
+        cd build
+        make -j$(sysctl -n hw.ncpu)
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-macos
+        path: build/Testing/

@@ -1,0 +1,57 @@
+# Build directories
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled binaries
+gara
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+*.env
+!.env.example
+
+# Dependencies
+_deps/
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Test files
+test_images/
+*.jpg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+
+# AWS
+.aws/
+credentials
+
+# Generated files
+install_manifest.txt
+compile_commands.json
