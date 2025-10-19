@@ -87,82 +87,92 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# Build libvips using ExternalProject (it uses Meson, not CMake)
-set(VIPS_PREFIX ${CMAKE_BINARY_DIR}/libvips-install)
-set(VIPS_INCLUDE_DIR ${VIPS_PREFIX}/include)
+# Try to find system libvips first
+pkg_check_modules(VIPS vips-cpp)
 
-# Platform-specific library configuration
-if(APPLE)
-    set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.dylib)
-    set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.dylib)
-    set(VIPS_LIB_TYPE SHARED)
-elseif(BUILD_STATIC)
-    # On Linux with static build, prefer static libraries
-    set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.a)
-    set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.a)
-    set(VIPS_LIB_TYPE STATIC)
+if(VIPS_FOUND)
+    # Use system libvips
+    message(STATUS "Using system libvips: ${VIPS_VERSION}")
+    add_library(vips INTERFACE)
+    target_include_directories(vips INTERFACE ${VIPS_INCLUDE_DIRS})
+    target_link_directories(vips INTERFACE ${VIPS_LIBRARY_DIRS})
+    target_link_libraries(vips INTERFACE ${VIPS_LIBRARIES})
+
+    add_library(vips-cpp INTERFACE)
+    target_link_libraries(vips-cpp INTERFACE vips)
 else()
-    # On Linux with dynamic build
-    set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.so)
-    set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.so)
-    set(VIPS_LIB_TYPE SHARED)
+    # Build libvips from source using ExternalProject
+    message(STATUS "Building libvips from source")
+    set(VIPS_PREFIX ${CMAKE_BINARY_DIR}/libvips-install)
+    set(VIPS_INCLUDE_DIR ${VIPS_PREFIX}/include)
+
+    # Platform-specific library configuration
+    if(APPLE)
+        set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.dylib)
+        set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.dylib)
+        set(VIPS_LIB_TYPE SHARED)
+    elseif(BUILD_STATIC)
+        set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.a)
+        set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.a)
+        set(VIPS_LIB_TYPE STATIC)
+    else()
+        set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.so)
+        set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.so)
+        set(VIPS_LIB_TYPE SHARED)
+    endif()
+
+    file(MAKE_DIRECTORY ${VIPS_INCLUDE_DIR})
+
+    # Configure meson build options
+    if(BUILD_STATIC AND NOT APPLE)
+        set(MESON_DEFAULT_LIBRARY "static")
+        set(MESON_PREFER_STATIC "-Dprefer_static=true")
+    else()
+        set(MESON_DEFAULT_LIBRARY "shared")
+        set(MESON_PREFER_STATIC "")
+    endif()
+
+    ExternalProject_Add(
+        libvips_external
+        GIT_REPOSITORY https://github.com/libvips/libvips.git
+        GIT_TAG v8.15.2
+        PREFIX ${CMAKE_BINARY_DIR}/libvips
+        CONFIGURE_COMMAND meson setup
+                          --prefix=${VIPS_PREFIX}
+                          --buildtype=release
+                          --default-library=${MESON_DEFAULT_LIBRARY}
+                          ${MESON_PREFER_STATIC}
+                          -Dintrospection=disabled
+                          -Ddeprecated=false
+                          -Dcpp=true
+                          -Djpeg=enabled
+                          -Dpng=enabled
+                          -Dwebp=enabled
+                          <SOURCE_DIR> <BINARY_DIR>
+        BUILD_COMMAND meson compile -C <BINARY_DIR>
+        INSTALL_COMMAND meson install -C <BINARY_DIR>
+        BUILD_BYPRODUCTS ${VIPS_LIB} ${VIPS_CPP_LIB}
+        LOG_CONFIGURE TRUE
+        LOG_BUILD TRUE
+        LOG_INSTALL TRUE
+        LOG_OUTPUT_ON_FAILURE TRUE
+    )
+
+    add_library(vips ${VIPS_LIB_TYPE} IMPORTED GLOBAL)
+    set_target_properties(vips PROPERTIES
+        IMPORTED_LOCATION ${VIPS_LIB}
+        INTERFACE_INCLUDE_DIRECTORIES ${VIPS_INCLUDE_DIR}
+    )
+    add_dependencies(vips libvips_external)
+
+    add_library(vips-cpp ${VIPS_LIB_TYPE} IMPORTED GLOBAL)
+    set_target_properties(vips-cpp PROPERTIES
+        IMPORTED_LOCATION ${VIPS_CPP_LIB}
+        INTERFACE_INCLUDE_DIRECTORIES ${VIPS_INCLUDE_DIR}
+        INTERFACE_LINK_LIBRARIES vips
+    )
+    add_dependencies(vips-cpp libvips_external)
 endif()
-
-# Create the include directory to satisfy CMake
-file(MAKE_DIRECTORY ${VIPS_INCLUDE_DIR})
-
-# Configure meson build options
-if(BUILD_STATIC AND NOT APPLE)
-    set(MESON_DEFAULT_LIBRARY "static")
-    set(MESON_PREFER_STATIC "-Dprefer_static=true")
-else()
-    set(MESON_DEFAULT_LIBRARY "shared")
-    set(MESON_PREFER_STATIC "")
-endif()
-
-# Build libvips with image format support
-# Build C++ bindings explicitly
-ExternalProject_Add(
-    libvips_external
-    GIT_REPOSITORY https://github.com/libvips/libvips.git
-    GIT_TAG v8.15.2
-    PREFIX ${CMAKE_BINARY_DIR}/libvips
-    CONFIGURE_COMMAND meson setup
-                      --prefix=${VIPS_PREFIX}
-                      --buildtype=release
-                      --default-library=${MESON_DEFAULT_LIBRARY}
-                      ${MESON_PREFER_STATIC}
-                      -Dintrospection=disabled
-                      -Ddeprecated=false
-                      -Dcpp=true
-                      -Djpeg=enabled
-                      -Dpng=enabled
-                      -Dwebp=enabled
-                      <SOURCE_DIR> <BINARY_DIR>
-    BUILD_COMMAND meson compile -C <BINARY_DIR>
-    INSTALL_COMMAND meson install -C <BINARY_DIR>
-    BUILD_BYPRODUCTS ${VIPS_LIB} ${VIPS_CPP_LIB}
-    LOG_CONFIGURE TRUE
-    LOG_BUILD TRUE
-    LOG_INSTALL TRUE
-    LOG_OUTPUT_ON_FAILURE TRUE
-)
-
-# Create imported targets for libvips and libvips-cpp
-add_library(vips ${VIPS_LIB_TYPE} IMPORTED GLOBAL)
-set_target_properties(vips PROPERTIES
-    IMPORTED_LOCATION ${VIPS_LIB}
-    INTERFACE_INCLUDE_DIRECTORIES ${VIPS_INCLUDE_DIR}
-)
-add_dependencies(vips libvips_external)
-
-add_library(vips-cpp ${VIPS_LIB_TYPE} IMPORTED GLOBAL)
-set_target_properties(vips-cpp PROPERTIES
-    IMPORTED_LOCATION ${VIPS_CPP_LIB}
-    INTERFACE_INCLUDE_DIRECTORIES ${VIPS_INCLUDE_DIR}
-    INTERFACE_LINK_LIBRARIES vips
-)
-add_dependencies(vips-cpp libvips_external)
 
 # Library with shared code (for both main app and tests)
 add_library(gara_lib
