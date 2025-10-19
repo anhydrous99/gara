@@ -60,7 +60,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install openssl zlib cmake meson ninja pkg-config glib jpeg libpng webp
+        brew install openssl zlib cmake pkg-config glib vips
 
     - name: Configure CMake
       run: |

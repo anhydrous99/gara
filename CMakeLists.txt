@@ -93,10 +93,14 @@ pkg_check_modules(VIPS vips-cpp)
 if(VIPS_FOUND)
     # Use system libvips
     message(STATUS "Using system libvips: ${VIPS_VERSION}")
+    message(STATUS "VIPS libraries: ${VIPS_LIBRARIES}")
+    message(STATUS "VIPS library dirs: ${VIPS_LIBRARY_DIRS}")
+    message(STATUS "VIPS include dirs: ${VIPS_INCLUDE_DIRS}")
+
     add_library(vips INTERFACE)
     target_include_directories(vips INTERFACE ${VIPS_INCLUDE_DIRS})
     target_link_directories(vips INTERFACE ${VIPS_LIBRARY_DIRS})
-    target_link_libraries(vips INTERFACE ${VIPS_LIBRARIES})
+    target_link_libraries(vips INTERFACE ${VIPS_LDFLAGS})
 
     add_library(vips-cpp INTERFACE)
     target_link_libraries(vips-cpp INTERFACE vips)
@@ -135,7 +139,7 @@ else()
     ExternalProject_Add(
         libvips_external
         GIT_REPOSITORY https://github.com/libvips/libvips.git
-        GIT_TAG v8.15.2
+        GIT_TAG v8.16.0
         PREFIX ${CMAKE_BINARY_DIR}/libvips
         CONFIGURE_COMMAND meson setup
                           --prefix=${VIPS_PREFIX}
@@ -144,10 +148,6 @@ else()
                           ${MESON_PREFER_STATIC}
                           -Dintrospection=disabled
                           -Ddeprecated=false
-                          -Dcpp=true
-                          -Djpeg=enabled
-                          -Dpng=enabled
-                          -Dwebp=enabled
                           <SOURCE_DIR> <BINARY_DIR>
         BUILD_COMMAND meson compile -C <BINARY_DIR>
         INSTALL_COMMAND meson install -C <BINARY_DIR>
@@ -196,8 +196,10 @@ target_link_directories(gara_lib PUBLIC
     ${GOBJECT_LIBRARY_DIRS}
 )
 
-# Ensure libvips is built before gara_lib
-add_dependencies(gara_lib vips)
+# Ensure libvips is built before gara_lib (only needed when building from source)
+if(NOT VIPS_FOUND)
+    add_dependencies(gara_lib vips)
+endif()
 
 target_link_libraries(gara_lib
         PUBLIC
