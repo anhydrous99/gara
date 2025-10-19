@@ -1,5 +1,7 @@
 # Gara Image Service
 
+[![Tests](https://github.com/anhydrous99/gara/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/anhydrous99/gara/actions/workflows/test.yml)
+
 High-performance image transformation service built with C++, Crow, AWS S3, and libvips.
 
 ## Features
