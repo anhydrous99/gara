@@ -96,10 +96,16 @@ if(APPLE)
     set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.dylib)
     set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.dylib)
     set(VIPS_LIB_TYPE SHARED)
-else()
+elseif(BUILD_STATIC)
+    # On Linux with static build, prefer static libraries
     set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.a)
     set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.a)
     set(VIPS_LIB_TYPE STATIC)
+else()
+    # On Linux with dynamic build
+    set(VIPS_LIB ${VIPS_PREFIX}/lib/libvips.so)
+    set(VIPS_CPP_LIB ${VIPS_PREFIX}/lib/libvips-cpp.so)
+    set(VIPS_LIB_TYPE SHARED)
 endif()
 
 # Create the include directory to satisfy CMake
@@ -116,12 +122,8 @@ endif()
 
 # Build libvips with image format support
 # On macOS, these will link dynamically; on Linux, we'll try to link statically
-ExternalProject_Add(
-    libvips_external
-    GIT_REPOSITORY https://github.com/libvips/libvips.git
-    GIT_TAG v8.15.2
-    PREFIX ${CMAKE_BINARY_DIR}/libvips
-    CONFIGURE_COMMAND meson setup --prefix=${VIPS_PREFIX}
+# For Linux static builds, we need to ensure the configure step doesn't fail
+set(VIPS_CONFIGURE_COMMAND meson setup --prefix=${VIPS_PREFIX}
                       --buildtype=release
                       --default-library=${MESON_DEFAULT_LIBRARY}
                       ${MESON_PREFER_STATIC}
@@ -130,10 +132,25 @@ ExternalProject_Add(
                       -Djpeg=enabled
                       -Dpng=enabled
                       -Dwebp=enabled
-                      <SOURCE_DIR> <BINARY_DIR>
+                      <SOURCE_DIR> <BINARY_DIR>)
+
+# Add additional options for static builds on Linux
+if(BUILD_STATIC AND UNIX AND NOT APPLE)
+    set(VIPS_CONFIGURE_COMMAND ${VIPS_CONFIGURE_COMMAND} -Dcpp=true)
+endif()
+
+ExternalProject_Add(
+    libvips_external
+    GIT_REPOSITORY https://github.com/libvips/libvips.git
+    GIT_TAG v8.15.2
+    PREFIX ${CMAKE_BINARY_DIR}/libvips
+    CONFIGURE_COMMAND ${VIPS_CONFIGURE_COMMAND}
     BUILD_COMMAND meson compile -C <BINARY_DIR>
     INSTALL_COMMAND meson install -C <BINARY_DIR>
     BUILD_BYPRODUCTS ${VIPS_LIB} ${VIPS_CPP_LIB}
+    LOG_CONFIGURE TRUE
+    LOG_BUILD TRUE
+    LOG_INSTALL TRUE
 )
 
 # Create imported targets for libvips and libvips-cpp

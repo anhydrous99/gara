@@ -24,7 +24,7 @@ COPY . .
 
 RUN mkdir -p build && \
     cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=OFF && \
     make -j$(nproc) && make install
 
 # Runtime stage
@@ -37,10 +37,15 @@ RUN apk add --no-cache \
     glib \
     libcurl \
     openssl \
-    zlib
+    zlib \
+    libjpeg-turbo \
+    libpng \
+    libwebp \
+    libstdc++
 
-# Copy the built binary from builder stage
+# Copy the built binary and libvips libraries from builder stage
 COPY --from=builder /usr/local/bin/gara /usr/local/bin/gara
+COPY --from=builder /usr/local/lib/libvips*.so* /usr/local/lib/
 
 # Create non-root user
 RUN addgroup -g 1000 crowuser && adduser -u 1000 -G crowuser -s /sbin/nologin -D crowuser
