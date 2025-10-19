@@ -1,0 +1,34 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Build artifacts
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Tests (we build them but don't need them in the context)
+tests/
+
+# CI/CD
+.github/
+
+# Misc
+.DS_Store
+*.log

@@ -24,11 +24,14 @@ COPY . .
 
 RUN mkdir -p build && \
     cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=OFF && \
-    make -j$(nproc) && make install
+    cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_STATIC=OFF && \
+    make -j$(nproc) && \
+    make install && \
+    strip --strip-unneeded /usr/local/bin/gara && \
+    find /usr/local/lib -name "libvips*.so*" -exec strip --strip-unneeded {} \;
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.19
 
 WORKDIR /app
 
@@ -45,7 +48,8 @@ RUN apk add --no-cache \
 
 # Copy the built binary and libvips libraries from builder stage
 COPY --from=builder /usr/local/bin/gara /usr/local/bin/gara
-COPY --from=builder /usr/local/lib/libvips*.so* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libvips.so* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libvips-cpp.so* /usr/local/lib/
 
 # Create non-root user
 RUN addgroup -g 1000 crowuser && adduser -u 1000 -G crowuser -s /sbin/nologin -D crowuser
