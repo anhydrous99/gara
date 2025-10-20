@@ -122,8 +122,10 @@ target_link_libraries(gara_lib
 add_executable(gara src/main.cpp)
 target_link_libraries(gara PRIVATE gara_lib)
 
-# Enable testing
-enable_testing()
-add_subdirectory(tests)
+# Enable testing (only if tests directory exists)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 install(TARGETS gara DESTINATION bin)
