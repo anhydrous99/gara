@@ -6,6 +6,7 @@
 #include "../services/s3_service.h"
 #include "../services/image_processor.h"
 #include "../services/cache_manager.h"
+#include "../services/secrets_service.h"
 
 namespace gara {
 
@@ -13,7 +14,8 @@ class ImageController {
 public:
     ImageController(std::shared_ptr<S3Service> s3_service,
                    std::shared_ptr<ImageProcessor> image_processor,
-                   std::shared_ptr<CacheManager> cache_manager);
+                   std::shared_ptr<CacheManager> cache_manager,
+                   std::shared_ptr<SecretsService> secrets_service);
 
     // Register routes with Crow app
     void registerRoutes(crow::SimpleApp& app);
@@ -22,6 +24,7 @@ private:
     std::shared_ptr<S3Service> s3_service_;
     std::shared_ptr<ImageProcessor> image_processor_;
     std::shared_ptr<CacheManager> cache_manager_;
+    std::shared_ptr<SecretsService> secrets_service_;
 
     // Upload endpoint handler
     crow::response handleUpload(const crow::request& req);

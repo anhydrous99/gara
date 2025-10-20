@@ -1,6 +1,7 @@
 #include "image_controller.h"
 #include "../utils/file_utils.h"
 #include "../models/image_metadata.h"
+#include "../middleware/auth_middleware.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
 
@@ -10,10 +11,12 @@ namespace gara {
 
 ImageController::ImageController(std::shared_ptr<S3Service> s3_service,
                                 std::shared_ptr<ImageProcessor> image_processor,
-                                std::shared_ptr<CacheManager> cache_manager)
+                                std::shared_ptr<CacheManager> cache_manager,
+                                std::shared_ptr<SecretsService> secrets_service)
     : s3_service_(s3_service),
       image_processor_(image_processor),
-      cache_manager_(cache_manager) {
+      cache_manager_(cache_manager),
+      secrets_service_(secrets_service) {
 }
 
 void ImageController::registerRoutes(crow::SimpleApp& app) {
@@ -38,6 +41,23 @@ void ImageController::registerRoutes(crow::SimpleApp& app) {
 
 crow::response ImageController::handleUpload(const crow::request& req) {
     try {
+        // Authenticate request using API key
+        std::string api_key = secrets_service_->getApiKey();
+
+        if (!middleware::AuthMiddleware::validateApiKey(req, api_key)) {
+            std::string provided_key = middleware::AuthMiddleware::extractApiKey(req);
+
+            if (provided_key.empty()) {
+                return middleware::AuthMiddleware::unauthorizedResponse(
+                    "Missing X-API-Key header"
+                );
+            } else {
+                return middleware::AuthMiddleware::unauthorizedResponse(
+                    "Invalid API key"
+                );
+            }
+        }
+
         std::vector<char> file_data;
         std::string filename;
 

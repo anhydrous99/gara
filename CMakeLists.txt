@@ -89,6 +89,8 @@ add_library(gara_lib
     src/services/s3_service.cpp
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
+    src/services/secrets_service.cpp
+    src/middleware/auth_middleware.cpp
     src/controllers/image_controller.cpp
 )
 
@@ -112,6 +114,7 @@ target_link_libraries(gara_lib
     nlohmann_json::nlohmann_json
     Threads::Threads
     aws-cpp-sdk-s3
+    aws-cpp-sdk-secretsmanager
     aws-cpp-sdk-core
     vips-cpp
     ${GOBJECT_LIBRARIES}

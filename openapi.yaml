@@ -64,7 +64,9 @@ paths:
   /api/images/upload:
     post:
       summary: Upload an image
-      description: Upload an image file to S3. Returns a unique image ID for retrieval and transformation.
+      description: Upload an image file to S3. Returns a unique image ID for retrieval and transformation. Requires API key authentication.
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -104,6 +106,21 @@ paths:
                   message:
                     type: string
                     example: "Image uploaded successfully"
+        '401':
+          description: Unauthorized (missing or invalid API key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing_key:
+                  value:
+                    error: "Unauthorized"
+                    message: "Missing X-API-Key header"
+                invalid_key:
+                  value:
+                    error: "Unauthorized"
+                    message: "Invalid API key"
         '400':
           description: Invalid request (no file, invalid format)
           content:
@@ -220,6 +237,13 @@ paths:
                 $ref: '#/components/schemas/Error'
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authenticating upload requests. Obtain this key from AWS Secrets Manager (secret name configured via SECRETS_MANAGER_API_KEY_NAME environment variable).
+
   schemas:
     Error:
       type: object

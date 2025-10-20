@@ -11,6 +11,7 @@ High-performance image transformation service built with C++, Crow, AWS S3, and 
 - S3-backed caching (no re-computation)
 - Hash-based deduplication
 - Presigned URLs for secure access
+- API key authentication via AWS Secrets Manager
 
 ## Quick Start
 
@@ -27,6 +28,13 @@ export S3_BUCKET_NAME=gara-images
 export AWS_REGION=us-east-1
 aws s3 mb s3://gara-images
 
+# Create API key in Secrets Manager
+aws secretsmanager create-secret \
+  --name gara-api-key \
+  --secret-string "your-secure-api-key-here" \
+  --region us-east-1
+export SECRETS_MANAGER_API_KEY_NAME=gara-api-key
+
 # Build
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -41,13 +49,32 @@ See [QUICK_START.md](QUICK_START.md) for a 5-minute setup guide.
 
 ## API
 
-### Upload Image
+## Authentication
+
+Upload endpoints require API key authentication. Include the `X-API-Key` header in your requests:
+
 ```bash
-curl -X POST http://localhost:8080/api/images/upload -F "file=@image.jpg"
+export API_KEY="your-api-key-from-secrets-manager"
+```
+
+### Upload Image
+
+**⚠️ Requires authentication**
+
+```bash
+curl -X POST http://localhost:8080/api/images/upload \
+  -H "X-API-Key: $API_KEY" \
+  -F "file=@image.jpg"
 # Returns: {"image_id": "abc123...", "message": "Image uploaded successfully"}
 ```
 
+**Error responses:**
+- `401 Unauthorized` - Missing or invalid API key
+
 ### Get/Transform Image
+
+**Public endpoint - no authentication required**
+
 ```bash
 # Get as JPEG
 curl "http://localhost:8080/api/images/abc123?format=jpeg&width=800"
@@ -83,11 +110,40 @@ curl http://localhost:8080/api/images/health
 ## Environment Variables
 
 ```bash
-S3_BUCKET_NAME=gara-images  # Required
-AWS_REGION=us-east-1        # Required
-PORT=80                     # Optional (default: 80)
-TEMP_UPLOAD_DIR=/tmp        # Optional
+S3_BUCKET_NAME=gara-images              # Required
+AWS_REGION=us-east-1                    # Required
+SECRETS_MANAGER_API_KEY_NAME=gara-api-key  # Required (API key secret name)
+PORT=80                                  # Optional (default: 80)
+TEMP_UPLOAD_DIR=/tmp                    # Optional
 ```
+
+## IAM Permissions
+
+The application requires the following IAM permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::gara-images/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:gara-api-key*"
+    }
+  ]
+}
+```
+
+**Key rotation**: The API key is cached for 5 minutes. After updating the secret in Secrets Manager, allow up to 5 minutes for the change to take effect.
 
 ## Testing
 

@@ -9,6 +9,7 @@
 #include "services/s3_service.h"
 #include "services/image_processor.h"
 #include "services/cache_manager.h"
+#include "services/secrets_service.h"
 #include "controllers/image_controller.h"
 
 int main() {
@@ -25,21 +26,33 @@ int main() {
     // Get configuration from environment
     const char* bucket_env = std::getenv("S3_BUCKET_NAME");
     const char* region_env = std::getenv("AWS_REGION");
+    const char* secret_name_env = std::getenv("SECRETS_MANAGER_API_KEY_NAME");
 
     std::string bucket_name = bucket_env ? bucket_env : "gara-images";
     std::string region = region_env ? region_env : "us-east-1";
+    std::string secret_name = secret_name_env ? secret_name_env : "gara-api-key";
 
     std::cout << "Starting Gara Image Service" << std::endl;
     std::cout << "S3 Bucket: " << bucket_name << std::endl;
     std::cout << "AWS Region: " << region << std::endl;
+    std::cout << "API Key Secret: " << secret_name << std::endl;
 
     // Initialize services
     auto s3_service = std::make_shared<gara::S3Service>(bucket_name, region);
     auto image_processor = std::make_shared<gara::ImageProcessor>();
     auto cache_manager = std::make_shared<gara::CacheManager>(s3_service);
+    auto secrets_service = std::make_shared<gara::SecretsService>(secret_name, region);
+
+    // Check if secrets service is initialized
+    if (!secrets_service->isInitialized()) {
+        std::cerr << "Warning: Failed to retrieve API key from Secrets Manager" << std::endl;
+        std::cerr << "Authentication will not work until secret is available" << std::endl;
+    } else {
+        std::cout << "API key authentication enabled" << std::endl;
+    }
 
     // Initialize controller
-    gara::ImageController image_controller(s3_service, image_processor, cache_manager);
+    gara::ImageController image_controller(s3_service, image_processor, cache_manager, secrets_service);
 
     // Startup App with compression middleware
     crow::SimpleApp app;
