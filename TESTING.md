@@ -4,7 +4,7 @@
 
 **~47 tests** using Google Test:
 - File utils (12): SHA256, I/O, validation
-- Image processor (10): Transformation, resizing, format conversion (uses real libvips)
+- Image processor (10): Transformation, resizing, format conversion (uses system libvips)
 - Cache manager (10): Cache operations
 - Controllers (8): Request/response models
 - Integration (7): End-to-end workflows

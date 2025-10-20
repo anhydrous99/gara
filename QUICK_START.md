@@ -3,8 +3,8 @@
 ## 5-Minute Setup (macOS)
 
 ```bash
-# 1. Install dependencies (libvips auto-built by CMake!)
-brew install openssl zlib cmake meson ninja pkg-config glib jpeg libpng webp
+# 1. Install dependencies
+brew install openssl zlib cmake pkg-config glib vips
 
 # 2. Configure AWS
 aws configure
@@ -83,10 +83,6 @@ export TEMP_UPLOAD_DIR=/tmp/uploads    # Optional (default: /tmp)
 ```
 
 ## Troubleshooting
-
-**Build takes a long time**:
-- First build downloads and compiles libvips (~5-10 minutes)
-- Subsequent builds are much faster (cached)
 
 **AWS credentials error**:
 ```bash

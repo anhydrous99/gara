@@ -11,17 +11,15 @@ High-performance image transformation service built with C++, Crow, AWS S3, and 
 - S3-backed caching (no re-computation)
 - Hash-based deduplication
 - Presigned URLs for secure access
-- **Static builds by default** - single binary, no dependencies
 
 ## Quick Start
 
 ```bash
 # Install dependencies
-brew install openssl zlib cmake meson ninja pkg-config glib jpeg libpng webp  # macOS
+brew install openssl zlib cmake pkg-config glib vips  # macOS
 # OR
 sudo apt-get install libssl-dev zlib1g-dev cmake build-essential \
-    meson ninja-build pkg-config libglib2.0-dev \
-    libjpeg-dev libpng-dev libwebp-dev  # Ubuntu
+    pkg-config libglib2.0-dev libvips-dev  # Ubuntu
 
 # Configure AWS
 aws configure
@@ -29,7 +27,7 @@ export S3_BUCKET_NAME=gara-images
 export AWS_REGION=us-east-1
 aws s3 mb s3://gara-images
 
-# Build (static by default, libvips auto-built)
+# Build
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j
@@ -72,35 +70,15 @@ curl http://localhost:8080/api/images/health
 2. **Transform**: Request → Check S3 cache → Transform if needed → Cache → Return presigned URL
 3. **Cache hit**: Instant URL (no processing)
 
-## Build Options
-
-```bash
-# Static build (default) - single binary, no runtime deps
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j
-
-# Dynamic build
-cmake .. -DBUILD_STATIC=OFF
-
-# Minimal size build
-cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel
-make -j && strip gara  # ~50MB
-```
-
-**Verify static build** (Linux):
-```bash
-ldd ./gara  # Should show "not a dynamic executable"
-```
-
 ## Dependencies
 
-**System** (required for libvips build):
+**System packages** (required):
 - OpenSSL, zlib
-- CMake, meson, ninja, pkg-config, glib
-- Image format libraries: libjpeg, libpng, libwebp (for image processing)
+- CMake, pkg-config, glib
+- libvips (image processing library)
 
 **Auto-fetched by CMake**:
-- ASIO, Crow, nlohmann/json, AWS SDK, Google Test, **libvips** (built from source)
+- ASIO, Crow, nlohmann/json, AWS SDK, Google Test
 
 ## Environment Variables
 
@@ -125,32 +103,7 @@ See [TESTING.md](TESTING.md) for details.
 
 ## Deployment
 
-**Static binary** - copy and run anywhere:
-```bash
-# Build
-cmake .. -DCMAKE_BUILD_TYPE=Release && make -j && strip gara
-
-# Deploy to server
-scp gara user@server:/opt/gara/
-ssh user@server '/opt/gara/gara'  # No deps needed!
-```
-
-**Docker** - minimal scratch image:
-```dockerfile
-FROM ubuntu:22.04 AS builder
-RUN apt-get update && apt-get install -y cmake build-essential \
-    libssl-dev zlib1g-dev meson ninja-build pkg-config libglib2.0-dev \
-    libjpeg-dev libpng-dev libwebp-dev
-COPY . /app
-RUN cd /app/build && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j && strip gara
-
-FROM scratch
-COPY --from=builder /app/build/gara /gara
-EXPOSE 80
-ENTRYPOINT ["/gara"]
-```
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for EC2, ECS, and production setups.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker, EC2, ECS, and production setups.
 
 ## Project Structure
 

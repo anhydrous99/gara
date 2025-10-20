@@ -5,11 +5,11 @@
 **System packages**:
 ```bash
 # macOS
-brew install openssl zlib cmake meson ninja pkg-config glib
+brew install openssl zlib cmake pkg-config glib vips
 
 # Ubuntu
 sudo apt-get install -y libssl-dev zlib1g-dev cmake build-essential \
-    meson ninja-build pkg-config libglib2.0-dev
+    pkg-config libglib2.0-dev libvips-dev
 ```
 
 **AWS setup**:
@@ -56,7 +56,7 @@ set -e
 # Install dependencies
 sudo apt-get update && sudo apt-get install -y \
     libssl-dev zlib1g-dev cmake build-essential git \
-    meson ninja-build pkg-config libglib2.0-dev nginx
+    pkg-config libglib2.0-dev libvips-dev nginx
 
 # Clone and build
 cd /opt
