@@ -22,7 +22,7 @@ RUN mkdir -p build && \
     cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_STATIC=OFF && \
     make -j$(nproc) && \
     make install && \
-    strip --strip-unneeded /usr/local/bin/gara
+    strip --strip-unneeded /usr/local/bin/gara-image
 
 # Runtime stage
 FROM alpine:3.19
@@ -39,7 +39,7 @@ RUN apk add --no-cache \
     libstdc++
 
 # Copy the built binary from builder stage
-COPY --from=builder /usr/local/bin/gara /usr/local/bin/gara
+COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
 
 # Create non-root user
 RUN addgroup -g 1000 crowuser && adduser -u 1000 -G crowuser -s /sbin/nologin -D crowuser
@@ -51,4 +51,4 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-CMD ["gara"]
+CMD ["gara-image"]

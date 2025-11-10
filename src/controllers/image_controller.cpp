@@ -47,15 +47,19 @@ crow::response ImageController::handleUpload(const crow::request& req) {
         if (!middleware::AuthMiddleware::validateApiKey(req, api_key)) {
             std::string provided_key = middleware::AuthMiddleware::extractApiKey(req);
 
-            if (provided_key.empty()) {
-                return middleware::AuthMiddleware::unauthorizedResponse(
-                    "Missing X-API-Key header"
-                );
-            } else {
-                return middleware::AuthMiddleware::unauthorizedResponse(
-                    "Invalid API key"
-                );
-            }
+            crow::response auth_resp = [this, &provided_key]() {
+                if (provided_key.empty()) {
+                    return middleware::AuthMiddleware::unauthorizedResponse(
+                        "Missing X-API-Key header"
+                    );
+                } else {
+                    return middleware::AuthMiddleware::unauthorizedResponse(
+                        "Invalid API key"
+                    );
+                }
+            }();
+            addCorsHeaders(auth_resp);
+            return auth_resp;
         }
 
         std::vector<char> file_data;
@@ -69,6 +73,7 @@ crow::response ImageController::handleUpload(const crow::request& req) {
             };
             crow::response resp(400, error_response.dump());
             resp.add_header("Content-Type", "application/json");
+            addCorsHeaders(resp);
             return resp;
         }
 
@@ -81,6 +86,7 @@ crow::response ImageController::handleUpload(const crow::request& req) {
             };
             crow::response resp(413, error_response.dump());
             resp.add_header("Content-Type", "application/json");
+            addCorsHeaders(resp);
             return resp;
         }
 
@@ -94,6 +100,7 @@ crow::response ImageController::handleUpload(const crow::request& req) {
             };
             crow::response resp(500, error_response.dump());
             resp.add_header("Content-Type", "application/json");
+            addCorsHeaders(resp);
             return resp;
         }
 
@@ -108,6 +115,7 @@ crow::response ImageController::handleUpload(const crow::request& req) {
 
         crow::response resp(201, response.dump());
         resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
         return resp;
 
     } catch (const std::exception& e) {
@@ -118,6 +126,7 @@ crow::response ImageController::handleUpload(const crow::request& req) {
         };
         crow::response resp(500, error_response.dump());
         resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
         return resp;
     }
 }
@@ -138,6 +147,7 @@ crow::response ImageController::handleGetImage(const crow::request& req,
             };
             crow::response resp(404, error_response.dump());
             resp.add_header("Content-Type", "application/json");
+            addCorsHeaders(resp);
             return resp;
         }
 
@@ -155,6 +165,7 @@ crow::response ImageController::handleGetImage(const crow::request& req,
 
         crow::response resp(200, response.dump());
         resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
         return resp;
 
     } catch (const std::exception& e) {
@@ -165,6 +176,7 @@ crow::response ImageController::handleGetImage(const crow::request& req,
         };
         crow::response resp(500, error_response.dump());
         resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
         return resp;
     }
 }
@@ -177,6 +189,7 @@ crow::response ImageController::handleHealthCheck(const crow::request& req) {
     };
     crow::response resp(200, response.dump());
     resp.add_header("Content-Type", "application/json");
+    addCorsHeaders(resp);
     return resp;
 }
 
@@ -356,6 +369,13 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
 
     // Return the S3 key
     return request.getCacheKey();
+}
+
+void ImageController::addCorsHeaders(crow::response& resp) {
+    resp.add_header("Access-Control-Allow-Origin", "*");
+    resp.add_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    resp.add_header("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization");
+    resp.add_header("Access-Control-Max-Age", "3600");
 }
 
 } // namespace gara

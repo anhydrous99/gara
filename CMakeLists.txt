@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(gara)
+project(gara-image)
 
 # Workaround for CMake 4.x compatibility with older dependencies
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "4.0.0")
@@ -122,8 +122,8 @@ target_link_libraries(gara_lib
 )
 
 # Main executable
-add_executable(gara src/main.cpp)
-target_link_libraries(gara PRIVATE gara_lib)
+add_executable(gara-image src/main.cpp)
+target_link_libraries(gara-image PRIVATE gara_lib)
 
 # Enable testing (only if tests directory exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
@@ -131,4 +131,4 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS gara DESTINATION bin)
+

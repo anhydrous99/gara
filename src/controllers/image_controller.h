@@ -50,6 +50,9 @@ private:
 
     // Helper: Get or create transformed image
     std::string getOrCreateTransformed(const TransformRequest& request);
+
+    // Helper: Add CORS headers to response
+    void addCorsHeaders(crow::response& resp);
 };
 
 } // namespace gara
