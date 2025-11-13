@@ -85,13 +85,17 @@ target_link_libraries(vips-cpp INTERFACE vips)
 # Library with shared code (for both main app and tests)
 add_library(gara_lib
     src/models/image_metadata.cpp
+    src/models/album.cpp
     src/utils/file_utils.cpp
+    src/utils/id_generator.cpp
     src/services/s3_service.cpp
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
     src/services/secrets_service.cpp
+    src/services/album_service.cpp
     src/middleware/auth_middleware.cpp
     src/controllers/image_controller.cpp
+    src/controllers/album_controller.cpp
 )
 
 target_include_directories(gara_lib PUBLIC
@@ -115,6 +119,7 @@ target_link_libraries(gara_lib
     Threads::Threads
     aws-cpp-sdk-s3
     aws-cpp-sdk-secretsmanager
+    aws-cpp-sdk-dynamodb
     aws-cpp-sdk-core
     vips-cpp
     ${GOBJECT_LIBRARIES}

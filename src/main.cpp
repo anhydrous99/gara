@@ -10,7 +10,11 @@
 #include "services/image_processor.h"
 #include "services/cache_manager.h"
 #include "services/secrets_service.h"
+#include "services/album_service.h"
+#include "services/dynamodb_client_wrapper.h"
 #include "controllers/image_controller.h"
+#include "controllers/album_controller.h"
+#include <aws/dynamodb/DynamoDBClient.h>
 
 int main() {
     // Initialize AWS SDK
@@ -27,15 +31,18 @@ int main() {
     const char* bucket_env = std::getenv("S3_BUCKET_NAME");
     const char* region_env = std::getenv("AWS_REGION");
     const char* secret_name_env = std::getenv("SECRETS_MANAGER_API_KEY_NAME");
+    const char* dynamodb_table_env = std::getenv("DYNAMODB_TABLE_NAME");
 
     std::string bucket_name = bucket_env ? bucket_env : "gara-images";
     std::string region = region_env ? region_env : "us-east-1";
     std::string secret_name = secret_name_env ? secret_name_env : "gara-api-key";
+    std::string dynamodb_table = dynamodb_table_env ? dynamodb_table_env : "gara-albums";
 
     std::cout << "Starting Gara Image Service" << std::endl;
     std::cout << "S3 Bucket: " << bucket_name << std::endl;
     std::cout << "AWS Region: " << region << std::endl;
     std::cout << "API Key Secret: " << secret_name << std::endl;
+    std::cout << "DynamoDB Table: " << dynamodb_table << std::endl;
 
     // Initialize services
     auto s3_service = std::make_shared<gara::S3Service>(bucket_name, region);
@@ -51,8 +58,18 @@ int main() {
         std::cout << "API key authentication enabled" << std::endl;
     }
 
-    // Initialize controller
+    // Initialize DynamoDB client
+    Aws::Client::ClientConfiguration dynamodb_config;
+    dynamodb_config.region = region.c_str();
+    auto dynamodb_client = std::make_shared<Aws::DynamoDB::DynamoDBClient>(dynamodb_config);
+    auto dynamodb_wrapper = std::make_shared<gara::DynamoDBClientWrapper>(dynamodb_client);
+
+    // Initialize album service
+    auto album_service = std::make_shared<gara::AlbumService>(dynamodb_table, dynamodb_wrapper, s3_service);
+
+    // Initialize controllers
     gara::ImageController image_controller(s3_service, image_processor, cache_manager, secrets_service);
+    gara::AlbumController album_controller(album_service, s3_service, secrets_service);
 
     // Startup App with compression middleware
     crow::SimpleApp app;
@@ -97,6 +114,9 @@ int main() {
 
     // Register image routes
     image_controller.registerRoutes(app);
+
+    // Register album routes
+    album_controller.registerRoutes(app);
 
     // Get port from environment
     char* port_env = std::getenv("PORT");

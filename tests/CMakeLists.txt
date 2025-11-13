@@ -4,8 +4,10 @@ add_executable(gara_tests
     services/image_processor_test.cpp
     services/cache_manager_test.cpp
     services/secrets_service_test.cpp
+    services/album_service_test.cpp
     middleware/auth_middleware_test.cpp
     controllers/image_controller_test.cpp
+    controllers/album_controller_test.cpp
     integration_test.cpp
 )
 
