@@ -130,6 +130,11 @@ target_link_libraries(gara_lib
 add_executable(gara-image src/main.cpp)
 target_link_libraries(gara-image PRIVATE gara_lib)
 
+# Install the main executable
+install(TARGETS gara-image
+        RUNTIME DESTINATION bin)
+
+
 # Enable testing (only if tests directory exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     enable_testing()
