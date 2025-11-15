@@ -6,13 +6,40 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+# Cancel in-progress runs for the same workflow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+
+    # ========================================================================
+    # Priority 1: Caching - 50-70% faster builds
+    # ========================================================================
+
+    - name: Cache apt packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/test.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
+
+    - name: Cache CMake build
+      uses: actions/cache@v4
+      with:
+        path: |
+          build
+          ~/.ccache
+        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
 
     - name: Install dependencies
       run: |
@@ -26,52 +53,154 @@ jobs:
           libssl-dev \
           libcurl4-openssl-dev \
           libvips-dev \
-          libglib2.0-dev
+          libglib2.0-dev \
+          ccache \
+          lcov
+
+    # ========================================================================
+    # Build with ccache and coverage
+    # ========================================================================
+
+    - name: Setup ccache
+      run: |
+        ccache --max-size=500M
+        ccache --set-config=compression=true
+        ccache --zero-stats
 
     - name: Configure CMake
       run: |
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_STATIC=OFF
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DENABLE_COVERAGE=ON \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DBUILD_STATIC=OFF
 
     - name: Build
       run: |
         cd build
-        make -j$(nproc) VERBOSE=1
+        cmake --build . -j$(nproc) --verbose
+
+    - name: ccache statistics
+      run: ccache --show-stats
+
+    # ========================================================================
+    # Run Tests
+    # ========================================================================
 
     - name: Run tests
       run: |
         cd build
         ctest --output-on-failure --verbose
 
+    # ========================================================================
+    # Priority 2: Code Coverage
+    # ========================================================================
+
+    - name: Generate coverage report
+      if: success()
+      run: |
+        cd build
+        lcov --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info \
+          '/usr/*' \
+          '*/tests/*' \
+          '*/googletest/*' \
+          '*/build/*' \
+          --output-file coverage_filtered.info
+        lcov --list coverage_filtered.info
+
+    - name: Upload coverage to Codecov
+      if: success()
+      uses: codecov/codecov-action@v4
+      continue-on-error: true
+      with:
+        files: ./build/coverage_filtered.info
+        flags: unittests
+        name: codecov-ubuntu
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Check coverage threshold
+      if: success()
+      run: |
+        cd build
+        COVERAGE=$(lcov --summary coverage_filtered.info 2>&1 | grep "lines" | awk '{print $2}' | sed 's/%//')
+        echo "::notice::Code coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
+          echo "::warning::Coverage $COVERAGE% is below 80% target (not enforced yet)"
+        fi
+
+    # ========================================================================
+    # Upload Artifacts
+    # ========================================================================
+
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: build/Testing/
+        name: test-results-ubuntu
+        path: |
+          build/Testing/
+          build/coverage_filtered.info
+        retention-days: 30
 
   test-macos:
     runs-on: macos-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+
+    # ========================================================================
+    # macOS Caching
+    # ========================================================================
+
+    - name: Cache Homebrew packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Caches/Homebrew
+          /usr/local/Cellar
+        key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/test.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-brew-
+
+    - name: Cache CMake build
+      uses: actions/cache@v4
+      with:
+        path: |
+          build
+          ~/.ccache
+        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+        restore-keys: |
+          ${{ runner.os }}-build-
 
     - name: Install dependencies
       run: |
-        brew install openssl zlib cmake pkg-config glib vips
+        brew install openssl zlib cmake pkg-config glib vips ccache
+
+    - name: Setup ccache
+      run: |
+        ccache --max-size=500M
+        ccache --zero-stats
 
     - name: Configure CMake
       run: |
         mkdir -p build
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
       run: |
         cd build
-        make -j$(sysctl -n hw.ncpu)
+        cmake --build . -j$(sysctl -n hw.ncpu)
+
+    - name: ccache statistics
+      run: ccache --show-stats
 
     - name: Run tests
       run: |
@@ -84,3 +213,4 @@ jobs:
       with:
         name: test-results-macos
         path: build/Testing/
+        retention-days: 30
