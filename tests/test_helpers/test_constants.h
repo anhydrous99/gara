@@ -49,14 +49,22 @@ const std::string MIME_DEFAULT = "application/octet-stream";
 
 // Test identifiers
 const std::string TEST_IMAGE_ID = "test_image_id";
+const std::string TEST_IMAGE_ID_1 = "img1";
+const std::string TEST_IMAGE_ID_2 = "img2";
+const std::string TEST_IMAGE_ID_3 = "img3";
 const std::string TEST_ALBUM_ID = "test_album_id";
+const std::string TEST_ALBUM_ID_123 = "123";
 const std::string TEST_BUCKET_NAME = "test-bucket";
 const std::string TEST_REGION = "us-east-1";
 const std::string TEST_REGION_EU_WEST = "eu-west-1";
 const std::string TEST_REGION_AP_SOUTH = "ap-south-1";
 const std::string TEST_TABLE_NAME = "test-table";
+const std::string TEST_ALBUMS_TABLE_NAME = "test-albums-table";
 const std::string TEST_SECRET_NAME = "test-secret";
 const std::string TEST_SECRET_NAME_CUSTOM = "my-api-key";
+const std::string TEST_COVER_IMAGE_ID = "cover123";
+const std::string IMAGE_ID_NONEXISTENT = "nonexistent_image";
+const std::string ALBUM_ID_NONEXISTENT = "nonexistent";
 
 // AWS S3 key patterns
 const std::string S3_RAW_PREFIX = "raw/";
@@ -102,6 +110,32 @@ constexpr bool SKIP_AWS_INIT = true;             // Skip AWS initialization in t
 
 // Thread testing constants
 constexpr int THREAD_ITERATION_COUNT = 100;  // Number of iterations per thread
+
+// Album constants
+const std::string ALBUM_NAME_TEST = "Test Album";
+const std::string ALBUM_NAME_UPDATED = "Updated Album";
+const std::string ALBUM_NAME_DUPLICATE = "Duplicate Album";
+const std::string ALBUM_DESCRIPTION_TEST = "A test album";
+const std::string ALBUM_DESCRIPTION_UPDATED = "Updated description";
+const std::string ALBUM_TAG_1 = "tag1";
+const std::string ALBUM_TAG_2 = "tag2";
+const std::string ALBUM_TAG_NEW = "new_tag";
+
+// Album array and collection constants
+constexpr size_t ALBUM_TAGS_COUNT_ONE = 1;
+constexpr size_t ALBUM_TAGS_COUNT_TWO = 2;
+constexpr size_t ALBUM_IMAGES_COUNT_TWO = 2;
+constexpr size_t ALBUM_IMAGES_COUNT_THREE = 3;
+constexpr size_t ARRAY_INDEX_FIRST = 0;
+
+// Album image positioning
+constexpr int ALBUM_IMAGE_POSITION_0 = 0;
+constexpr int ALBUM_IMAGE_POSITION_2 = 2;
+
+// Timestamp constants
+constexpr std::time_t TEST_TIMESTAMP_CREATED = 1234567890;
+constexpr std::time_t TEST_TIMESTAMP_UPDATED = 1234567900;
+constexpr std::time_t TIMESTAMP_ZERO = 0;
 
 } // namespace test_constants
 } // namespace gara
