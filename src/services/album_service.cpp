@@ -289,6 +289,14 @@ Album AlbumService::updateAlbum(const std::string& album_id, const UpdateAlbumRe
 }
 
 bool AlbumService::deleteAlbum(const std::string& album_id) {
+    // Check if album exists first
+    try {
+        getAlbum(album_id);
+    } catch (const exceptions::NotFoundException&) {
+        // Album doesn't exist
+        return false;
+    }
+
     Aws::DynamoDB::Model::DeleteItemRequest request;
     request.SetTableName(table_name_.c_str());
     request.AddKey("AlbumId", Aws::DynamoDB::Model::AttributeValue(album_id.c_str()));
@@ -304,8 +312,20 @@ bool AlbumService::deleteAlbum(const std::string& album_id) {
 }
 
 Album AlbumService::addImages(const std::string& album_id, const AddImagesRequest& request) {
+    // Validate image list is not empty
+    if (request.image_ids.empty()) {
+        throw std::runtime_error("Cannot add empty image list to album");
+    }
+
     // Get existing album
     Album album = getAlbum(album_id);
+
+    // Check for duplicate images (images already in the album)
+    for (const auto& image_id : request.image_ids) {
+        if (std::find(album.image_ids.begin(), album.image_ids.end(), image_id) != album.image_ids.end()) {
+            throw exceptions::ValidationException("Image " + image_id + " is already in this album");
+        }
+    }
 
     // Validate all images exist
     for (const auto& image_id : request.image_ids) {
@@ -345,9 +365,11 @@ Album AlbumService::removeImage(const std::string& album_id, const std::string& 
 
     // Remove image from list
     auto it = std::find(album.image_ids.begin(), album.image_ids.end(), image_id);
-    if (it != album.image_ids.end()) {
-        album.image_ids.erase(it);
+    if (it == album.image_ids.end()) {
+        throw exceptions::ValidationException("Image " + image_id + " is not in this album");
     }
+
+    album.image_ids.erase(it);
 
     // If this was the cover image, clear it
     if (album.cover_image_id == image_id) {
