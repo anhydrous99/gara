@@ -303,10 +303,16 @@ public:
     static std::string createTransformedKey(const std::string& image_id,
                                             const std::string& format,
                                             int width,
-                                            int height) {
-        return test_constants::S3_TRANSFORMED_PREFIX + image_id + "_" +
-               format + "_" + std::to_string(width) + "x" +
-               std::to_string(height) + "." + format;
+                                            int height,
+                                            bool watermarked = true) {
+        std::string key = test_constants::S3_TRANSFORMED_PREFIX + image_id + "_" +
+                         format + "_" + std::to_string(width) + "x" +
+                         std::to_string(height);
+        if (watermarked) {
+            key += "_wm";
+        }
+        key += "." + format;
+        return key;
     }
 };
 

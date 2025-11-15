@@ -67,7 +67,8 @@ std::string CacheManager::getS3Key(const TransformRequest& request) {
         request.image_id,
         request.target_format,
         request.width,
-        request.height
+        request.height,
+        request.watermarked
     );
 }
 
