@@ -3,17 +3,24 @@
 #include "models/image_metadata.h"
 #include "utils/file_utils.h"
 #include "mocks/mock_s3_service.h"
+#include "test_helpers/test_constants.h"
+#include "test_helpers/test_builders.h"
+#include "test_helpers/test_file_manager.h"
+#include "test_helpers/custom_matchers.h"
 #include <memory>
 
 using namespace gara;
 using namespace gara::utils;
 using namespace gara::testing;
+using namespace gara::test_constants;
+using namespace gara::test_builders;
+using namespace gara::test_helpers;
+using namespace gara::test_matchers;
 
 class CacheManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Use fake S3 service for testing
-        fake_s3_ = std::make_shared<FakeS3Service>("test-bucket", "us-east-1");
+        fake_s3_ = std::make_shared<FakeS3Service>(TEST_BUCKET_NAME, TEST_REGION);
         cache_manager_ = std::make_shared<CacheManager>(fake_s3_);
     }
 
@@ -21,180 +28,390 @@ protected:
         fake_s3_->clear();
     }
 
+    // Helper to upload fake transformed image
+    void uploadFakeTransformedImage(const TransformRequest& request) {
+        std::string s3_key = request.getCacheKey();
+        auto fake_data = TestDataBuilder::createData(SMALL_DATA_SIZE);
+        fake_s3_->uploadData(fake_data, s3_key);
+    }
+
     std::shared_ptr<FakeS3Service> fake_s3_;
     std::shared_ptr<CacheManager> cache_manager_;
 };
 
-// Test cache miss (transformed image doesn't exist)
-TEST_F(CacheManagerTest, ExistsInCacheMiss) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+// ============================================================================
+// Cache Existence Tests
+// ============================================================================
 
+TEST_F(CacheManagerTest, ExistsInCache_WhenImageNotCached_ReturnsFalse) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+
+    // Act
     bool exists = cache_manager_->existsInCache(request);
-    EXPECT_FALSE(exists);
+
+    // Assert
+    EXPECT_FALSE(exists)
+        << "Transform should not exist in cache initially";
 }
 
-// Test cache hit (transformed image exists)
-TEST_F(CacheManagerTest, ExistsInCacheHit) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+TEST_F(CacheManagerTest, ExistsInCache_WhenImageCached_ReturnsTrue) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    uploadFakeTransformedImage(request);
 
-    // Upload a fake transformed image
-    std::string s3_key = request.getCacheKey();
-    std::vector<char> fake_data = {'f', 'a', 'k', 'e'};
-    fake_s3_->uploadData(fake_data, s3_key);
-
+    // Act
     bool exists = cache_manager_->existsInCache(request);
-    EXPECT_TRUE(exists);
+
+    // Assert
+    EXPECT_TRUE(exists)
+        << "Transform should exist in cache after upload";
 }
 
-// Test get cached image when it exists
-TEST_F(CacheManagerTest, GetCachedImageHit) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+// ============================================================================
+// Get Cached Image Tests
+// ============================================================================
 
-    // Upload a fake transformed image
-    std::string s3_key = request.getCacheKey();
-    std::vector<char> fake_data = {'f', 'a', 'k', 'e'};
-    fake_s3_->uploadData(fake_data, s3_key);
+TEST_F(CacheManagerTest, GetCachedImage_WhenImageCached_ReturnsS3Key) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    uploadFakeTransformedImage(request);
 
+    std::string expected_key = request.getCacheKey();
+
+    // Act
     std::string cached_key = cache_manager_->getCachedImage(request);
-    EXPECT_FALSE(cached_key.empty());
-    EXPECT_EQ(s3_key, cached_key);
+
+    // Assert
+    EXPECT_THAT(cached_key, IsNonEmptyString())
+        << "Cached image key should not be empty";
+
+    EXPECT_EQ(expected_key, cached_key)
+        << "Returned key should match the cache key";
 }
 
-// Test get cached image when it doesn't exist
-TEST_F(CacheManagerTest, GetCachedImageMiss) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+TEST_F(CacheManagerTest, GetCachedImage_WhenImageNotCached_ReturnsEmptyString) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
 
+    // Act
     std::string cached_key = cache_manager_->getCachedImage(request);
-    EXPECT_TRUE(cached_key.empty());
+
+    // Assert
+    EXPECT_TRUE(cached_key.empty())
+        << "Should return empty string when image not in cache";
 }
 
-// Test store in cache
-TEST_F(CacheManagerTest, StoreInCache) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+// ============================================================================
+// Store in Cache Tests
+// ============================================================================
 
-    // Create a temporary file to cache
+TEST_F(CacheManagerTest, StoreInCache_WithValidFile_Succeeds) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+
     TempFile temp("cache_test_");
-    std::vector<char> data = {'t', 'e', 's', 't'};
+    auto data = TestDataBuilder::createData(SMALL_DATA_SIZE);
     temp.write(data);
 
+    // Act
     bool success = cache_manager_->storeInCache(request, temp.getPath());
-    EXPECT_TRUE(success);
 
-    // Verify it's now in cache
-    EXPECT_TRUE(cache_manager_->existsInCache(request));
+    // Assert
+    EXPECT_TRUE(success)
+        << "Storing valid file in cache should succeed";
 
-    // Verify we can retrieve it
+    EXPECT_TRUE(cache_manager_->existsInCache(request))
+        << "Image should exist in cache after successful store";
+
     std::string cached_key = cache_manager_->getCachedImage(request);
-    EXPECT_FALSE(cached_key.empty());
+    EXPECT_THAT(cached_key, IsNonEmptyString())
+        << "Should be able to retrieve cached image";
 }
 
-// Test generate presigned URL for cached image
-TEST_F(CacheManagerTest, GetPresignedUrlForCached) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+TEST_F(CacheManagerTest, StoreInCache_NonExistentFile_ReturnsFalse) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    auto nonexistent_path = TestFileManager::createUniquePath("nonexistent_", ".jpg");
 
-    // Upload a fake transformed image
-    std::string s3_key = request.getCacheKey();
-    std::vector<char> fake_data = {'f', 'a', 'k', 'e'};
-    fake_s3_->uploadData(fake_data, s3_key);
+    // Act
+    bool success = cache_manager_->storeInCache(request, nonexistent_path);
 
-    std::string url = cache_manager_->getPresignedUrl(request, 3600);
-    EXPECT_FALSE(url.empty());
-    EXPECT_NE(std::string::npos, url.find("fake-s3.amazonaws.com"));
-    EXPECT_NE(std::string::npos, url.find("expires=3600"));
+    // Assert
+    EXPECT_FALSE(success)
+        << "Storing non-existent file should fail";
+
+    EXPECT_FALSE(cache_manager_->existsInCache(request))
+        << "Failed store should not add to cache";
 }
 
-// Test generate presigned URL for non-existent image
-TEST_F(CacheManagerTest, GetPresignedUrlForNonExistent) {
-    TransformRequest request("nonexistent_id", "jpeg", 800, 600);
+// ============================================================================
+// Presigned URL Tests
+// ============================================================================
 
-    std::string url = cache_manager_->getPresignedUrl(request, 3600);
-    EXPECT_TRUE(url.empty());
+TEST_F(CacheManagerTest, GetPresignedUrl_ForCachedImage_ReturnsValidUrl) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    uploadFakeTransformedImage(request);
+
+    // Act
+    std::string url = cache_manager_->getPresignedUrl(request, ONE_HOUR_SECONDS);
+
+    // Assert
+    EXPECT_THAT(url, IsNonEmptyString())
+        << "Presigned URL should not be empty";
+
+    EXPECT_THAT(url, IsValidPresignedUrl())
+        << "Should return a valid presigned URL format";
+
+    EXPECT_THAT(url, ContainsSubstring("fake-s3.amazonaws.com"))
+        << "URL should contain S3 domain";
+
+    EXPECT_THAT(url, ContainsSubstring("expires=" + std::to_string(ONE_HOUR_SECONDS)))
+        << "URL should include expiration parameter";
 }
 
-// Test clear specific transformation
-TEST_F(CacheManagerTest, ClearTransformation) {
-    TransformRequest request("test_image_id", "jpeg", 800, 600);
+TEST_F(CacheManagerTest, GetPresignedUrl_ForNonCachedImage_ReturnsEmptyString) {
+    // Arrange
+    auto request = TransformRequestBuilder()
+        .withImageId("nonexistent_id")
+        .build();
 
-    // Upload a fake transformed image
-    std::string s3_key = request.getCacheKey();
-    std::vector<char> fake_data = {'f', 'a', 'k', 'e'};
-    fake_s3_->uploadData(fake_data, s3_key);
+    // Act
+    std::string url = cache_manager_->getPresignedUrl(request, ONE_HOUR_SECONDS);
 
-    EXPECT_TRUE(cache_manager_->existsInCache(request));
+    // Assert
+    EXPECT_TRUE(url.empty())
+        << "Presigned URL should be empty for non-cached image";
+}
 
-    // Clear the transformation
+TEST_F(CacheManagerTest, GetPresignedUrl_WithDifferentExpiration_ReflectsInUrl) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    uploadFakeTransformedImage(request);
+
+    // Act
+    std::string url_1h = cache_manager_->getPresignedUrl(request, ONE_HOUR_SECONDS);
+    std::string url_24h = cache_manager_->getPresignedUrl(request, ONE_DAY_SECONDS);
+
+    // Assert
+    EXPECT_THAT(url_1h, ContainsSubstring("expires=" + std::to_string(ONE_HOUR_SECONDS)))
+        << "1-hour URL should have 3600 second expiration";
+
+    EXPECT_THAT(url_24h, ContainsSubstring("expires=" + std::to_string(ONE_DAY_SECONDS)))
+        << "24-hour URL should have 86400 second expiration";
+}
+
+// ============================================================================
+// Clear Transformation Tests
+// ============================================================================
+
+TEST_F(CacheManagerTest, ClearTransformation_ForCachedImage_RemovesFromCache) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+    uploadFakeTransformedImage(request);
+
+    ASSERT_TRUE(cache_manager_->existsInCache(request))
+        << "Setup: Image should be cached initially";
+
+    // Act
     bool deleted = cache_manager_->clearTransformation(request);
+
+    // Assert
+    EXPECT_TRUE(deleted)
+        << "Clear operation should return true for existing cached image";
+
+    EXPECT_FALSE(cache_manager_->existsInCache(request))
+        << "Image should no longer exist in cache after clear";
+}
+
+TEST_F(CacheManagerTest, ClearTransformation_ForNonCachedImage_ReturnsFalse) {
+    // Arrange
+    auto request = TransformRequestBuilder::defaultJpeg();
+
+    // Act
+    bool deleted = cache_manager_->clearTransformation(request);
+
+    // Assert
+    EXPECT_FALSE(deleted)
+        << "Clearing non-existent cached image should return false";
+}
+
+// ============================================================================
+// Cache Key Generation Tests
+// ============================================================================
+
+TEST_F(CacheManagerTest, CacheKey_SameParameters_GeneratesSameKey) {
+    // Arrange
+    auto req1 = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withFormat(FORMAT_JPEG)
+        .withDimensions(STANDARD_WIDTH_800, STANDARD_HEIGHT_600)
+        .build();
+
+    auto req2 = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withFormat(FORMAT_JPEG)
+        .withDimensions(STANDARD_WIDTH_800, STANDARD_HEIGHT_600)
+        .build();
+
+    // Act & Assert
+    EXPECT_EQ(req1.getCacheKey(), req2.getCacheKey())
+        << "Same parameters should produce identical cache keys";
+}
+
+TEST_F(CacheManagerTest, CacheKey_DifferentFormat_GeneratesDifferentKey) {
+    // Arrange
+    auto req_jpeg = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withFormat(FORMAT_JPEG)
+        .build();
+
+    auto req_png = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withFormat(FORMAT_PNG)
+        .build();
+
+    // Act & Assert
+    EXPECT_NE(req_jpeg.getCacheKey(), req_png.getCacheKey())
+        << "Different formats should produce different cache keys";
+}
+
+TEST_F(CacheManagerTest, CacheKey_DifferentDimensions_GeneratesDifferentKey) {
+    // Arrange
+    auto req_800x600 = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withDimensions(STANDARD_WIDTH_800, STANDARD_HEIGHT_600)
+        .build();
+
+    auto req_1024x768 = TransformRequestBuilder()
+        .withImageId("abc123")
+        .withDimensions(STANDARD_WIDTH_1024, STANDARD_HEIGHT_768)
+        .build();
+
+    // Act & Assert
+    EXPECT_NE(req_800x600.getCacheKey(), req_1024x768.getCacheKey())
+        << "Different dimensions should produce different cache keys";
+}
+
+// ============================================================================
+// Multiple Dimension Caching Tests
+// ============================================================================
+
+TEST_F(CacheManagerTest, Cache_DifferentDimensionsSameImage_StoresSeparately) {
+    // Arrange
+    std::string image_id = TEST_IMAGE_ID;
+
+    auto req_800x600 = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withDimensions(STANDARD_WIDTH_800, STANDARD_HEIGHT_600)
+        .build();
+
+    auto req_1024x768 = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withDimensions(STANDARD_WIDTH_1024, STANDARD_HEIGHT_768)
+        .build();
+
+    TempFile temp("dim_test_");
+    auto data = TestDataBuilder::createData(SMALL_DATA_SIZE);
+    temp.write(data);
+
+    // Act
+    bool success1 = cache_manager_->storeInCache(req_800x600, temp.getPath());
+    bool success2 = cache_manager_->storeInCache(req_1024x768, temp.getPath());
+
+    // Assert
+    EXPECT_TRUE(success1 && success2)
+        << "Both transformations should be cached successfully";
+
+    EXPECT_TRUE(cache_manager_->existsInCache(req_800x600))
+        << "800x600 transformation should exist in cache";
+
+    EXPECT_TRUE(cache_manager_->existsInCache(req_1024x768))
+        << "1024x768 transformation should exist in cache";
+
+    EXPECT_NE(cache_manager_->getCachedImage(req_800x600),
+              cache_manager_->getCachedImage(req_1024x768))
+        << "Different dimensions should have different cache keys";
+}
+
+// ============================================================================
+// Multiple Format Caching Tests
+// ============================================================================
+
+TEST_F(CacheManagerTest, Cache_DifferentFormatsSameImage_StoresSeparately) {
+    // Arrange
+    std::string image_id = TEST_IMAGE_ID;
+
+    auto req_jpeg = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withFormat(FORMAT_JPEG)
+        .build();
+
+    auto req_png = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withFormat(FORMAT_PNG)
+        .build();
+
+    auto req_webp = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withFormat(FORMAT_WEBP)
+        .build();
+
+    TempFile temp("format_test_");
+    auto data = TestDataBuilder::createData(SMALL_DATA_SIZE);
+    temp.write(data);
+
+    // Act
+    ASSERT_TRUE(cache_manager_->storeInCache(req_jpeg, temp.getPath()));
+    ASSERT_TRUE(cache_manager_->storeInCache(req_png, temp.getPath()));
+    ASSERT_TRUE(cache_manager_->storeInCache(req_webp, temp.getPath()));
+
+    // Assert - All formats cached
+    EXPECT_TRUE(cache_manager_->existsInCache(req_jpeg))
+        << "JPEG format should be cached";
+
+    EXPECT_TRUE(cache_manager_->existsInCache(req_png))
+        << "PNG format should be cached";
+
+    EXPECT_TRUE(cache_manager_->existsInCache(req_webp))
+        << "WebP format should be cached";
+
+    // Assert - Verify object count in S3
+    EXPECT_EQ(3, fake_s3_->getObjectCount())
+        << "Should have 3 separate cached objects in S3";
+}
+
+// ============================================================================
+// Cache Isolation Tests
+// ============================================================================
+
+TEST_F(CacheManagerTest, ClearTransformation_SpecificFormat_DoesNotAffectOthers) {
+    // Arrange
+    std::string image_id = TEST_IMAGE_ID;
+
+    auto req_jpeg = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withFormat(FORMAT_JPEG)
+        .build();
+
+    auto req_png = TransformRequestBuilder()
+        .withImageId(image_id)
+        .withFormat(FORMAT_PNG)
+        .build();
+
+    uploadFakeTransformedImage(req_jpeg);
+    uploadFakeTransformedImage(req_png);
+
+    // Act - Clear only JPEG
+    bool deleted = cache_manager_->clearTransformation(req_jpeg);
+
+    // Assert
     EXPECT_TRUE(deleted);
 
-    // Verify it's no longer in cache
-    EXPECT_FALSE(cache_manager_->existsInCache(request));
-}
+    EXPECT_FALSE(cache_manager_->existsInCache(req_jpeg))
+        << "JPEG format should be removed from cache";
 
-// Test cache key generation
-TEST_F(CacheManagerTest, CacheKeyGeneration) {
-    TransformRequest req1("abc123", "jpeg", 800, 600);
-    TransformRequest req2("abc123", "jpeg", 800, 600);
-    TransformRequest req3("abc123", "png", 800, 600);
-    TransformRequest req4("abc123", "jpeg", 1024, 768);
-
-    // Same parameters should produce same key
-    EXPECT_EQ(req1.getCacheKey(), req2.getCacheKey());
-
-    // Different format should produce different key
-    EXPECT_NE(req1.getCacheKey(), req3.getCacheKey());
-
-    // Different dimensions should produce different key
-    EXPECT_NE(req1.getCacheKey(), req4.getCacheKey());
-}
-
-// Test cache with different dimensions
-TEST_F(CacheManagerTest, CacheDifferentDimensions) {
-    std::string image_id = "test_image";
-
-    TransformRequest req1(image_id, "jpeg", 800, 600);
-    TransformRequest req2(image_id, "jpeg", 1024, 768);
-
-    // Create temp file
-    TempFile temp("dim_test_");
-    std::vector<char> data = {'t', 'e', 's', 't'};
-    temp.write(data);
-
-    // Cache both transformations
-    EXPECT_TRUE(cache_manager_->storeInCache(req1, temp.getPath()));
-    EXPECT_TRUE(cache_manager_->storeInCache(req2, temp.getPath()));
-
-    // Both should exist in cache
-    EXPECT_TRUE(cache_manager_->existsInCache(req1));
-    EXPECT_TRUE(cache_manager_->existsInCache(req2));
-
-    // Should have different keys
-    EXPECT_NE(cache_manager_->getCachedImage(req1),
-             cache_manager_->getCachedImage(req2));
-}
-
-// Test cache with different formats
-TEST_F(CacheManagerTest, CacheDifferentFormats) {
-    std::string image_id = "test_image";
-
-    TransformRequest req_jpeg(image_id, "jpeg", 800, 600);
-    TransformRequest req_png(image_id, "png", 800, 600);
-    TransformRequest req_webp(image_id, "webp", 800, 600);
-
-    // Create temp file
-    TempFile temp("format_test_");
-    std::vector<char> data = {'t', 'e', 's', 't'};
-    temp.write(data);
-
-    // Cache all formats
-    EXPECT_TRUE(cache_manager_->storeInCache(req_jpeg, temp.getPath()));
-    EXPECT_TRUE(cache_manager_->storeInCache(req_png, temp.getPath()));
-    EXPECT_TRUE(cache_manager_->storeInCache(req_webp, temp.getPath()));
-
-    // All should exist
-    EXPECT_TRUE(cache_manager_->existsInCache(req_jpeg));
-    EXPECT_TRUE(cache_manager_->existsInCache(req_png));
-    EXPECT_TRUE(cache_manager_->existsInCache(req_webp));
-
-    // Verify object count
-    EXPECT_EQ(3, fake_s3_->getObjectCount());
+    EXPECT_TRUE(cache_manager_->existsInCache(req_png))
+        << "PNG format should still exist in cache";
 }
