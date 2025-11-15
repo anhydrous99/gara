@@ -8,6 +8,7 @@ High-performance image transformation service built with C++, Crow, AWS S3, and 
 
 - Upload images up to 100MB (JPEG, PNG, GIF, TIFF, WebP)
 - On-demand format conversion (JPEG, PNG, WebP, TIFF) and resizing
+- **Automatic watermarking** with customizable text, position, and styling
 - S3-backed caching (no re-computation)
 - Hash-based deduplication
 - Presigned URLs for secure access
@@ -94,8 +95,20 @@ curl http://localhost:8080/api/images/health
 ## How It Works
 
 1. **Upload**: Image → SHA256 hash → S3 `raw/{hash}.{ext}`
-2. **Transform**: Request → Check S3 cache → Transform if needed → Cache → Return presigned URL
+2. **Transform**: Request → Check S3 cache → Transform if needed → **Apply watermark** → Cache → Return presigned URL
 3. **Cache hit**: Instant URL (no processing)
+
+## Watermarking
+
+All retrieved images are automatically watermarked with customizable text. The watermark:
+
+- **Scales automatically** with image size (font size is 2.5% of image width)
+- **White text with dark shadow** for visibility on any background
+- **Positioned** in bottom-right corner by default (configurable)
+- **Applied once** during transformation and then cached
+- **Configurable** via environment variables (text, position, opacity, etc.)
+
+To disable watermarking, set `WATERMARK_ENABLED=false`.
 
 ## Dependencies
 
@@ -110,11 +123,23 @@ curl http://localhost:8080/api/images/health
 ## Environment Variables
 
 ```bash
-S3_BUCKET_NAME=gara-images              # Required
-AWS_REGION=us-east-1                    # Required
-SECRETS_MANAGER_API_KEY_NAME=gara-api-key  # Required (API key secret name)
-PORT=80                                  # Optional (default: 80)
-TEMP_UPLOAD_DIR=/tmp                    # Optional
+# Required
+S3_BUCKET_NAME=gara-images              # S3 bucket for image storage
+AWS_REGION=us-east-1                    # AWS region
+SECRETS_MANAGER_API_KEY_NAME=gara-api-key  # API key secret name
+
+# Optional - Server
+PORT=80                                  # Server port (default: 80)
+TEMP_UPLOAD_DIR=/tmp                    # Temporary upload directory
+
+# Optional - Watermark
+WATERMARK_ENABLED=true                  # Enable/disable watermarking (default: true)
+WATERMARK_TEXT="© 2025 Armando Herrera" # Watermark text (default: "© 2025 Armando Herrera")
+WATERMARK_POSITION=bottom-right         # Position: top-left, top-right, bottom-left, bottom-right (default: bottom-right)
+WATERMARK_FONT_SIZE=24                  # Base font size, scales with image (default: 24)
+WATERMARK_COLOR=white                   # Text color (default: white)
+WATERMARK_OPACITY=0.9                   # Opacity 0.0-1.0 (default: 0.9)
+WATERMARK_MARGIN=20                     # Margin from edges in pixels (default: 20)
 ```
 
 ## IAM Permissions
@@ -169,18 +194,23 @@ src/
 ├── services/
 │   ├── s3_service.cpp                # S3 operations
 │   ├── image_processor.cpp           # libvips wrapper
+│   ├── watermark_service.cpp         # Watermark text rendering
 │   └── cache_manager.cpp             # Cache logic
 ├── utils/file_utils.cpp              # SHA256, I/O
-└── models/image_metadata.cpp         # Data structures
+└── models/
+    ├── image_metadata.cpp            # Data structures
+    └── watermark_config.h            # Watermark configuration
 ```
 
 ## S3 Structure
 
 ```
 s3://bucket/
-├── raw/{hash}.{ext}                           # Original uploads
-└── transformed/{hash}_{format}_{w}x{h}.{ext}  # Cached transforms
+├── raw/{hash}.{ext}                                # Original uploads
+└── transformed/{hash}_{format}_{w}x{h}_wm.{ext}   # Cached transforms with watermark
 ```
+
+Note: The `_wm` suffix in the cache key indicates a watermarked image.
 
 ## License
 

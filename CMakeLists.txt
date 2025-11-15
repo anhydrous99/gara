@@ -102,6 +102,7 @@ add_library(gara_lib
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
     src/services/secrets_service.cpp
+    src/services/watermark_service.cpp
     src/services/album_service.cpp
     src/middleware/auth_middleware.cpp
     src/controllers/image_controller.cpp

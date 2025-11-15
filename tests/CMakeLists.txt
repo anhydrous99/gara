@@ -5,6 +5,7 @@ add_executable(gara_tests
     services/image_processor_test.cpp
     services/cache_manager_test.cpp
     services/secrets_service_test.cpp
+    services/watermark_service_test.cpp
     services/album_service_test.cpp
     services/s3_service_test.cpp
     mappers/album_mapper_test.cpp

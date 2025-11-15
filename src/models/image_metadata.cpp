@@ -19,22 +19,30 @@ std::string ImageMetadata::generateRawKey(const std::string& hash, const std::st
 
 std::string ImageMetadata::generateTransformedKey(const std::string& hash,
                                                   const std::string& format,
-                                                  int width, int height) {
+                                                  int width, int height,
+                                                  bool watermarked) {
     std::ostringstream oss;
     oss << "transformed/" << hash << "_" << format << "_"
-        << width << "x" << height << "." << format;
+        << width << "x" << height;
+
+    // Add watermark identifier if watermarked
+    if (watermarked) {
+        oss << "_wm";
+    }
+
+    oss << "." << format;
     return oss.str();
 }
 
 TransformRequest::TransformRequest()
-    : image_id(""), target_format("jpeg"), width(0), height(0) {}
+    : image_id(""), target_format("jpeg"), width(0), height(0), watermarked(true) {}
 
 TransformRequest::TransformRequest(const std::string& id, const std::string& format,
-                                  int w, int h)
-    : image_id(id), target_format(format), width(w), height(h) {}
+                                  int w, int h, bool wm)
+    : image_id(id), target_format(format), width(w), height(h), watermarked(wm) {}
 
 std::string TransformRequest::getCacheKey() const {
-    return ImageMetadata::generateTransformedKey(image_id, target_format, width, height);
+    return ImageMetadata::generateTransformedKey(image_id, target_format, width, height, watermarked);
 }
 
 } // namespace gara
