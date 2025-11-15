@@ -12,6 +12,7 @@
 
 using namespace gara;
 using namespace gara::utils;
+using namespace gara::testing;  // Needed for FakeS3Service
 using namespace gara::exceptions;
 
 class ErrorHandlingTest : public ::testing::Test {
