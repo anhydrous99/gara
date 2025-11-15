@@ -49,7 +49,7 @@ COPY --from=builder /usr/lib/libvips.so* /usr/lib/
 COPY --from=builder /usr/lib/libvips-cpp.so* /usr/lib/
 
 # Create non-root user
-RUN groupadd -g 1000 crowuser && useradd -u 1000 -g crowuser -s /usr/sbin/nologin crowuser
+RUN groupadd -g 10000 crowuser && useradd -u 10000 -g crowuser -s /usr/sbin/nologin crowuser
 
 USER crowuser
 
