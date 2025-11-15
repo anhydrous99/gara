@@ -1,13 +1,17 @@
 # Test executable
 add_executable(gara_tests
     utils/file_utils_test.cpp
+    utils/id_generator_test.cpp
     services/image_processor_test.cpp
     services/cache_manager_test.cpp
     services/secrets_service_test.cpp
     services/album_service_test.cpp
+    services/s3_service_test.cpp
+    mappers/album_mapper_test.cpp
     middleware/auth_middleware_test.cpp
     controllers/image_controller_test.cpp
     controllers/album_controller_test.cpp
+    error_handling_test.cpp
     integration_test.cpp
 )
 
