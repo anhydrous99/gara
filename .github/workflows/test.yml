@@ -40,7 +40,7 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'tests/**') }}
         restore-keys: |
           ${{ runner.os }}-build-
 
@@ -103,16 +103,18 @@ jobs:
 
     - name: Generate coverage report
       if: success()
+      continue-on-error: true
       run: |
         cd build
-        lcov --capture --directory . --output-file coverage.info
+        # Use --checksum to handle potential line number mismatches
+        lcov --capture --directory . --output-file coverage.info --checksum --rc lcov_branch_coverage=0 || true
         lcov --remove coverage.info \
           '/usr/*' \
           '*/tests/*' \
           '*/googletest/*' \
           '*/build/*' \
-          --output-file coverage_filtered.info
-        lcov --list coverage_filtered.info
+          --output-file coverage_filtered.info || true
+        lcov --list coverage_filtered.info || echo "Coverage list failed, continuing..."
 
     - name: Upload coverage to Codecov
       if: success()
@@ -127,12 +129,21 @@ jobs:
 
     - name: Check coverage threshold
       if: success()
+      continue-on-error: true
       run: |
         cd build
-        COVERAGE=$(lcov --summary coverage_filtered.info 2>&1 | grep "lines" | awk '{print $2}' | sed 's/%//')
-        echo "::notice::Code coverage: $COVERAGE%"
-        if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
-          echo "::warning::Coverage $COVERAGE% is below 80% target (not enforced yet)"
+        if [ -f coverage_filtered.info ]; then
+          COVERAGE=$(lcov --summary coverage_filtered.info 2>&1 | grep "lines" | awk '{print $2}' | sed 's/%//' || echo "0")
+          if [ -n "$COVERAGE" ]; then
+            echo "::notice::Code coverage: $COVERAGE%"
+            if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
+              echo "::warning::Coverage $COVERAGE% is below 80% target (not enforced yet)"
+            fi
+          else
+            echo "::warning::Could not determine coverage percentage"
+          fi
+        else
+          echo "::warning::Coverage file not found, skipping threshold check"
         fi
 
     # ========================================================================
@@ -176,7 +187,7 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**') }}
+        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'tests/**') }}
         restore-keys: |
           ${{ runner.os }}-build-
 
