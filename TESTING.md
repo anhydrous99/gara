@@ -217,3 +217,203 @@ The following tests were added to improve coverage:
 - File utility error handling
 - Edge cases (empty inputs, very large inputs, Unicode)
 - Concurrent operations safety
+
+## Test Helpers
+
+The codebase provides several test helpers in `tests/test_helpers/` to write cleaner, more maintainable tests:
+
+### Constants (`test_helpers/test_constants.h`)
+
+Use named constants instead of magic numbers:
+
+```cpp
+#include "test_helpers/test_constants.h"
+using namespace gara::test_constants;
+
+// Good - Clear intent
+EXPECT_EQ(SHA256_HEX_LENGTH, hash.length());
+EXPECT_EQ(ONE_HOUR_SECONDS, expiration);
+EXPECT_EQ(STANDARD_WIDTH_800, width);
+
+// Bad - Magic numbers
+EXPECT_EQ(64, hash.length());      // What is 64?
+EXPECT_EQ(3600, expiration);       // What is 3600?
+EXPECT_EQ(800, width);             // Why 800?
+```
+
+### Builders (`test_helpers/test_builders.h`)
+
+Build complex test objects fluently:
+
+```cpp
+#include "test_helpers/test_builders.h"
+using namespace gara::test_builders;
+
+// Transform requests
+auto request = TransformRequestBuilder()
+    .withImageId("my_image")
+    .withFormat(FORMAT_PNG)
+    .withDimensions(1024, 768)
+    .build();
+
+// Or use convenience methods
+auto simple = TransformRequestBuilder::defaultJpeg();
+auto custom = TransformRequestBuilder::withSize(800, 600);
+
+// Album requests
+auto album = CreateAlbumRequestBuilder()
+    .withName("Test Album")
+    .published(true)
+    .addTag("travel")
+    .addTag("nature")
+    .build();
+
+// Test data
+auto data = TestDataBuilder::createData(1024, 'x');
+auto binary = TestDataBuilder::createBinaryData(256);
+auto key = TestDataBuilder::createRawImageKey("img123", "jpg");
+```
+
+### Custom Matchers (`test_helpers/custom_matchers.h`)
+
+Domain-specific assertions with clear error messages:
+
+```cpp
+#include "test_helpers/custom_matchers.h"
+using namespace gara::test_matchers;
+
+// Validate SHA256 hashes
+EXPECT_THAT(hash, IsValidSHA256Hash());
+
+// Validate URLs
+EXPECT_THAT(url, IsValidPresignedUrl());
+
+// Validate IDs
+EXPECT_THAT(album.album_id, IsValidAlbumId());
+EXPECT_THAT(uuid, IsValidUUID());
+
+// Check recent timestamps (within 60 seconds)
+EXPECT_THAT(album.created_at, IsRecentTimestamp(60));
+
+// Custom string matchers
+EXPECT_THAT(url, ContainsSubstring("s3.amazonaws.com"));
+EXPECT_THAT(name, IsNonEmptyString());
+
+// Collection size
+EXPECT_THAT(tags, HasSize(3));
+```
+
+### File Manager (`test_helpers/test_file_manager.h`)
+
+Generate unique file paths to avoid collisions in parallel tests:
+
+```cpp
+#include "test_helpers/test_file_manager.h"
+using namespace gara::test_helpers;
+
+// Generate unique paths (thread-safe)
+auto path = TestFileManager::createUniquePath("test_image_", ".jpg");
+// Returns: /tmp/gara_test_image_<timestamp>_<counter>.jpg
+
+// Thread-safe paths with thread ID
+auto thread_path = TestFileManager::createThreadSafePath("test_", ".txt");
+
+// Predictable paths for specific tests
+auto test_path = TestFileManager::createTestPath("MyTest", ".dat");
+```
+
+## Best Practices for Test Code
+
+### 1. Use Arrange-Act-Assert Pattern
+
+Structure your tests clearly:
+
+```cpp
+TEST_F(MyComponentTest, ProcessData_WithValidInput_ReturnsSuccess) {
+    // Arrange - Setup test data and expectations
+    auto input = TransformRequestBuilder::defaultJpeg();
+    auto expected = EXPECTED_RESULT;
+
+    // Act - Execute the behavior under test
+    auto result = component_->processData(input);
+
+    // Assert - Verify the outcome
+    EXPECT_EQ(expected, result)
+        << "Processing valid input should return expected result";
+}
+```
+
+### 2. Add Descriptive Assertion Messages
+
+Help future debuggers understand failures:
+
+```cpp
+// Good
+EXPECT_EQ(SHA256_HEX_LENGTH, hash.length())
+    << "SHA256 hash should be " << SHA256_HEX_LENGTH
+    << " hex characters, got " << hash.length()
+    << " for hash: " << hash;
+
+// Bad
+EXPECT_EQ(64, hash.length());
+```
+
+### 3. Use Test Builders for Complex Objects
+
+```cpp
+// Good - Readable and maintainable
+auto album = CreateAlbumRequestBuilder()
+    .withName("Vacation 2024")
+    .published(true)
+    .addTag("travel")
+    .build();
+
+// Bad - Verbose and error-prone
+CreateAlbumRequest album;
+album.name = "Vacation 2024";
+album.published = true;
+album.tags.push_back("travel");
+```
+
+### 4. Extract Helper Methods
+
+Keep tests focused and readable:
+
+```cpp
+class ImageProcessorTest : public ::testing::Test {
+protected:
+    // Extract complex setup to helper
+    std::string createTestImage(int width, int height) {
+        auto path = TestFileManager::createUniquePath("test_img_", ".ppm");
+        // ... image creation logic
+        temp_files_.push_back(path);
+        return path;
+    }
+
+    void TearDown() override {
+        for (const auto& file : temp_files_) {
+            FileUtils::deleteFile(file);
+        }
+    }
+
+    std::vector<std::string> temp_files_;
+};
+```
+
+### 5. Use Parameterized Tests for Similar Cases
+
+```cpp
+class ImageFormatTest : public ::testing::TestWithParam<std::string> {};
+
+TEST_P(ImageFormatTest, IsValidFormat) {
+    std::string format = GetParam();
+    EXPECT_TRUE(FileUtils::isValidImageFormat(format))
+        << format << " should be recognized as valid";
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ValidFormats,
+    ImageFormatTest,
+    ::testing::Values("jpg", "jpeg", "png", "gif", "webp", "tiff")
+);
+```
