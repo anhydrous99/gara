@@ -29,6 +29,7 @@ constexpr int STANDARD_HEIGHT_768 = 768;
 // Test content
 const std::string TEST_CONTENT = "Hello, Gara!";
 constexpr size_t TEST_CONTENT_SIZE = 12;  // Length of "Hello, Gara!"
+const std::string TEST_INVALID_IMAGE_CONTENT = "not an image";
 
 // Image formats
 const std::string FORMAT_JPEG = "jpeg";
@@ -37,6 +38,7 @@ const std::string FORMAT_PNG = "png";
 const std::string FORMAT_WEBP = "webp";
 const std::string FORMAT_GIF = "gif";
 const std::string FORMAT_TIFF = "tiff";
+const std::string FORMAT_PPM = "ppm";
 
 // MIME types
 const std::string MIME_JPEG = "image/jpeg";
@@ -70,6 +72,24 @@ constexpr int UNIQUENESS_TEST_COUNT = 10000;
 const std::string ERROR_NOT_FOUND = "not found";
 const std::string ERROR_INVALID_INPUT = "Invalid input";
 const std::string ERROR_UNAUTHORIZED = "Unauthorized";
+
+// Image processing constants
+constexpr int RGB_BANDS = 3;
+constexpr double RED_CHANNEL_MAX = 255.0;
+constexpr double GREEN_CHANNEL_MIN = 0.0;
+constexpr double BLUE_CHANNEL_MIN = 0.0;
+
+// Test image dimensions (specific sizes for testing)
+constexpr int TEST_SMALL_IMAGE_SIZE = 10;
+constexpr int TEST_MEDIUM_IMAGE_WIDTH = 100;
+constexpr int TEST_MEDIUM_IMAGE_HEIGHT = 50;
+
+// Resize test constants
+constexpr int RESIZE_MAINTAIN_ASPECT = 0;  // Use 0 to maintain aspect ratio
+constexpr int RESIZE_TARGET_WIDTH_20 = 20;
+constexpr int RESIZE_TARGET_HEIGHT_20 = 20;
+constexpr int RESIZE_TARGET_WIDTH_50 = 50;
+constexpr int RESIZE_TARGET_HEIGHT_25 = 25;
 
 } // namespace test_constants
 } // namespace gara
