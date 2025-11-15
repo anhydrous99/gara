@@ -24,7 +24,8 @@ struct ImageMetadata {
     // Generate S3 key for transformed image
     static std::string generateTransformedKey(const std::string& hash,
                                              const std::string& format,
-                                             int width, int height);
+                                             int width, int height,
+                                             bool watermarked = false);
 };
 
 struct TransformRequest {
@@ -32,10 +33,11 @@ struct TransformRequest {
     std::string target_format;  // Default: "jpeg"
     int width;                  // Target width (0 = maintain aspect)
     int height;                 // Target height (0 = maintain aspect)
+    bool watermarked;           // Whether to apply watermark
 
     TransformRequest();
     TransformRequest(const std::string& id, const std::string& format,
-                    int w, int h);
+                    int w, int h, bool wm = true);
 
     // Generate cache key for this transform
     std::string getCacheKey() const;

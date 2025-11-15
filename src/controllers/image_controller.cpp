@@ -12,11 +12,13 @@ namespace gara {
 ImageController::ImageController(std::shared_ptr<S3Service> s3_service,
                                 std::shared_ptr<ImageProcessor> image_processor,
                                 std::shared_ptr<CacheManager> cache_manager,
-                                std::shared_ptr<SecretsService> secrets_service)
+                                std::shared_ptr<SecretsService> secrets_service,
+                                std::shared_ptr<WatermarkService> watermark_service)
     : s3_service_(s3_service),
       image_processor_(image_processor),
       cache_manager_(cache_manager),
-      secrets_service_(secrets_service) {
+      secrets_service_(secrets_service),
+      watermark_service_(watermark_service) {
 }
 
 void ImageController::registerRoutes(crow::SimpleApp& app) {
@@ -359,6 +361,28 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
     if (!success) {
         std::cerr << "Image transformation failed" << std::endl;
         return "";
+    }
+
+    // Apply watermark if enabled
+    if (watermark_service_->isEnabled()) {
+        try {
+            // Load transformed image
+            vips::VImage transformed_image = vips::VImage::new_from_file(
+                transformed_temp.getPath().c_str()
+            );
+
+            // Apply watermark
+            vips::VImage watermarked = watermark_service_->applyWatermark(transformed_image);
+
+            // Save watermarked image back to temp file
+            watermarked.write_to_file(transformed_temp.getPath().c_str());
+
+            std::cout << "Watermark applied successfully" << std::endl;
+
+        } catch (const vips::VError& e) {
+            // Log error but continue (graceful degradation)
+            std::cerr << "Watermark failed, using non-watermarked image: " << e.what() << std::endl;
+        }
     }
 
     // Store in cache (S3)

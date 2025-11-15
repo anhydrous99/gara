@@ -10,10 +10,12 @@
 #include "services/image_processor.h"
 #include "services/cache_manager.h"
 #include "services/secrets_service.h"
+#include "services/watermark_service.h"
 #include "services/album_service.h"
 #include "services/dynamodb_client_wrapper.h"
 #include "controllers/image_controller.h"
 #include "controllers/album_controller.h"
+#include "models/watermark_config.h"
 #include <aws/dynamodb/DynamoDBClient.h>
 
 int main() {
@@ -50,6 +52,15 @@ int main() {
     auto cache_manager = std::make_shared<gara::CacheManager>(s3_service);
     auto secrets_service = std::make_shared<gara::SecretsService>(secret_name, region);
 
+    // Initialize watermark service
+    auto watermark_config = gara::WatermarkConfig::fromEnvironment();
+    auto watermark_service = std::make_shared<gara::WatermarkService>(watermark_config);
+
+    std::cout << "Watermark: " << (watermark_config.enabled ? "Enabled" : "Disabled") << std::endl;
+    if (watermark_config.enabled) {
+        std::cout << "Watermark text: " << watermark_config.text << std::endl;
+    }
+
     // Check if secrets service is initialized
     if (!secrets_service->isInitialized()) {
         std::cerr << "Warning: Failed to retrieve API key from Secrets Manager" << std::endl;
@@ -68,7 +79,7 @@ int main() {
     auto album_service = std::make_shared<gara::AlbumService>(dynamodb_table, dynamodb_wrapper, s3_service);
 
     // Initialize controllers
-    gara::ImageController image_controller(s3_service, image_processor, cache_manager, secrets_service);
+    gara::ImageController image_controller(s3_service, image_processor, cache_manager, secrets_service, watermark_service);
     gara::AlbumController album_controller(album_service, s3_service, secrets_service);
 
     // Startup App with compression middleware
