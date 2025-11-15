@@ -6,7 +6,6 @@
 #include <memory>
 
 using namespace gara;
-using namespace gara::testing;
 
 class AlbumMapperTest : public ::testing::Test {
 protected:
@@ -89,12 +88,11 @@ TEST_F(AlbumMapperTest, ItemToAlbumMinimalData) {
 TEST_F(AlbumMapperTest, ItemToAlbumEmptyArrays) {
     CreateAlbumRequest req;
     req.name = "Empty Arrays";
-    req.image_ids = {}; // Explicitly empty
-    req.tags = {};
+    req.tags = {};  // Explicitly empty tags
 
     Album album = album_service_->createAlbum(req);
 
-    EXPECT_EQ(album.image_ids.size(), 0);
+    EXPECT_EQ(album.image_ids.size(), 0);  // image_ids should be empty on creation
     EXPECT_EQ(album.tags.size(), 0);
 }
 
@@ -244,13 +242,12 @@ TEST_F(AlbumMapperTest, EmptyStringHandling) {
     CreateAlbumRequest req;
     req.name = "Empty Strings Test";
     req.description = "";  // Explicitly empty
-    req.cover_image_id = "";
 
     Album album = album_service_->createAlbum(req);
     Album retrieved = album_service_->getAlbum(album.album_id);
 
     EXPECT_EQ(retrieved.description, "");
-    EXPECT_EQ(retrieved.cover_image_id, "");
+    EXPECT_EQ(retrieved.cover_image_id, "");  // Should be empty on creation
 }
 
 // Test updating album preserves mapping
