@@ -25,18 +25,22 @@ RUN mkdir -p build && \
     strip --strip-unneeded /usr/local/bin/gara-image
 
 # Runtime stage
-FROM alpine:3.19
+FROM ubuntu:24.04
 
 WORKDIR /app
 
 # Install only runtime dependencies
-RUN apk add --no-cache \
-    glib \
-    libcurl \
-    openssl \
-    zlib \
-    vips \
-    libstdc++
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libvips-cpp42 \
+    libvips42 \
+    libglib2.0-0 \
+    libcurl4 \
+    libssl3 \
+    zlib1g \
+    libstdc++6 \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary from builder stage
 COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
@@ -49,6 +53,6 @@ USER crowuser
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:80/health || exit 1
 
 CMD ["gara-image"]
