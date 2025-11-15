@@ -52,7 +52,11 @@ const std::string TEST_IMAGE_ID = "test_image_id";
 const std::string TEST_ALBUM_ID = "test_album_id";
 const std::string TEST_BUCKET_NAME = "test-bucket";
 const std::string TEST_REGION = "us-east-1";
+const std::string TEST_REGION_EU_WEST = "eu-west-1";
+const std::string TEST_REGION_AP_SOUTH = "ap-south-1";
 const std::string TEST_TABLE_NAME = "test-table";
+const std::string TEST_SECRET_NAME = "test-secret";
+const std::string TEST_SECRET_NAME_CUSTOM = "my-api-key";
 
 // AWS S3 key patterns
 const std::string S3_RAW_PREFIX = "raw/";
@@ -90,6 +94,14 @@ constexpr int RESIZE_TARGET_WIDTH_20 = 20;
 constexpr int RESIZE_TARGET_HEIGHT_20 = 20;
 constexpr int RESIZE_TARGET_WIDTH_50 = 50;
 constexpr int RESIZE_TARGET_HEIGHT_25 = 25;
+
+// Secrets service constants
+constexpr int SECRETS_CACHE_TTL_SHORT = 1;       // 1 second for testing
+constexpr int SECRETS_CACHE_TTL_DEFAULT = 300;   // 5 minutes (default)
+constexpr bool SKIP_AWS_INIT = true;             // Skip AWS initialization in tests
+
+// Thread testing constants
+constexpr int THREAD_ITERATION_COUNT = 100;  // Number of iterations per thread
 
 } // namespace test_constants
 } // namespace gara
