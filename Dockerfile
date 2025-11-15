@@ -1,5 +1,5 @@
 # Builder stage
-FROM alpine:latest as builder
+FROM alpine:latest AS builder
 
 WORKDIR /app
 
@@ -31,8 +31,6 @@ WORKDIR /app
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libvips-cpp42 \
-    libvips42 \
     libglib2.0-0 \
     libcurl4 \
     libssl3 \
@@ -44,6 +42,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the built binary from builder stage
 COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
+
+# Copy libvips shared libraries from builder
+# Ubuntu doesn't have separate libvips-cpp packages, so we copy the compiled libraries from Alpine
+COPY --from=builder /usr/lib/libvips.so* /usr/lib/
+COPY --from=builder /usr/lib/libvips-cpp.so* /usr/lib/
 
 # Create non-root user
 RUN addgroup -g 1000 crowuser && adduser -u 1000 -G crowuser -s /sbin/nologin -D crowuser
