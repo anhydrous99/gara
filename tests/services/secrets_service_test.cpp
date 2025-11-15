@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include "services/secrets_service.h"
+#include "test_helpers/test_constants.h"
 #include <thread>
 #include <chrono>
 
 using namespace gara;
+using namespace gara::test_constants;
 
 class SecretsServiceTest : public ::testing::Test {
 protected:
@@ -12,74 +14,170 @@ protected:
     }
 };
 
-// Test constructor with skip_aws_init flag
-TEST_F(SecretsServiceTest, ConstructorSkipAWSInit) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
+// ============================================================================
+// Constructor and Initialization Tests
+// ============================================================================
 
-    // Service should not be initialized when skipping AWS init
-    EXPECT_FALSE(service.isInitialized());
-    EXPECT_EQ("test-secret", service.getSecretName());
+TEST_F(SecretsServiceTest, Constructor_WithSkipAWSInit_DoesNotInitialize) {
+    // Arrange & Act
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Assert
+    EXPECT_FALSE(service.isInitialized())
+        << "Service should not be initialized when skipping AWS init";
+
+    EXPECT_EQ(TEST_SECRET_NAME, service.getSecretName())
+        << "Secret name should be stored correctly";
 }
 
-// Test getApiKey returns empty string when not initialized
-TEST_F(SecretsServiceTest, GetApiKeyNotInitialized) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
+TEST_F(SecretsServiceTest, IsInitialized_BeforeInit_ReturnsFalse) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
 
+    // Act & Assert
+    EXPECT_FALSE(service.isInitialized())
+        << "Service should not be initialized before calling init";
+}
+
+TEST_F(SecretsServiceTest, GetSecretName_AfterConstruction_ReturnsCorrectName) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME_CUSTOM,
+        TEST_REGION_EU_WEST,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Act
+    std::string secret_name = service.getSecretName();
+
+    // Assert
+    EXPECT_EQ(TEST_SECRET_NAME_CUSTOM, secret_name)
+        << "Service should return the secret name provided in constructor";
+}
+
+// ============================================================================
+// API Key Retrieval Tests
+// ============================================================================
+
+TEST_F(SecretsServiceTest, GetApiKey_WhenNotInitialized_ReturnsEmptyString) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Act
     std::string key = service.getApiKey();
-    EXPECT_TRUE(key.empty());
+
+    // Assert
+    EXPECT_TRUE(key.empty())
+        << "API key should be empty when service is not initialized";
 }
 
-// Test isInitialized returns false before initialization
-TEST_F(SecretsServiceTest, IsInitializedReturnsFalse) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
+TEST_F(SecretsServiceTest, GetApiKey_MultipleCalls_ReturnsConsistentResults) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
 
-    EXPECT_FALSE(service.isInitialized());
-}
-
-// Test secret name is stored correctly
-TEST_F(SecretsServiceTest, SecretNameStored) {
-    SecretsService service("my-api-key", "eu-west-1", 300, true);
-
-    EXPECT_EQ("my-api-key", service.getSecretName());
-}
-
-// Test cache TTL behavior (simulated)
-TEST_F(SecretsServiceTest, CacheTTLConfiguration) {
-    // Create service with 1 second TTL
-    SecretsService service_short("test-secret", "us-east-1", 1, true);
-    EXPECT_FALSE(service_short.isInitialized());
-
-    // Create service with 300 second TTL (default)
-    SecretsService service_default("test-secret", "us-east-1", 300, true);
-    EXPECT_FALSE(service_default.isInitialized());
-}
-
-// Test refreshApiKey returns false when AWS is skipped
-TEST_F(SecretsServiceTest, RefreshApiKeyFailsWhenSkipped) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
-
-    bool result = service.refreshApiKey();
-    EXPECT_FALSE(result);
-}
-
-// Test multiple calls to getApiKey return consistent results
-TEST_F(SecretsServiceTest, MultipleGetApiKeyCalls) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
-
+    // Act
     std::string key1 = service.getApiKey();
     std::string key2 = service.getApiKey();
     std::string key3 = service.getApiKey();
 
-    EXPECT_EQ(key1, key2);
-    EXPECT_EQ(key2, key3);
+    // Assert
+    EXPECT_EQ(key1, key2)
+        << "Multiple calls to getApiKey should return the same value (call 1 vs 2)";
+
+    EXPECT_EQ(key2, key3)
+        << "Multiple calls to getApiKey should return the same value (call 2 vs 3)";
 }
 
-// Test thread safety (basic test - multiple threads accessing getApiKey)
-TEST_F(SecretsServiceTest, ThreadSafety) {
-    SecretsService service("test-secret", "us-east-1", 300, true);
+// ============================================================================
+// Cache TTL Configuration Tests
+// ============================================================================
 
+TEST_F(SecretsServiceTest, Constructor_WithShortTTL_ConfiguresCorrectly) {
+    // Arrange & Act - Create service with 1 second TTL
+    SecretsService service_short(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_SHORT,
+        SKIP_AWS_INIT
+    );
+
+    // Assert
+    EXPECT_FALSE(service_short.isInitialized())
+        << "Service with short TTL should not be initialized when skipping AWS";
+}
+
+TEST_F(SecretsServiceTest, Constructor_WithDefaultTTL_ConfiguresCorrectly) {
+    // Arrange & Act - Create service with default TTL
+    SecretsService service_default(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Assert
+    EXPECT_FALSE(service_default.isInitialized())
+        << "Service with default TTL should not be initialized when skipping AWS";
+}
+
+// ============================================================================
+// Refresh API Key Tests
+// ============================================================================
+
+TEST_F(SecretsServiceTest, RefreshApiKey_WhenAWSSkipped_ReturnsFalse) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Act
+    bool result = service.refreshApiKey();
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Refresh should fail when AWS initialization is skipped";
+}
+
+// ============================================================================
+// Thread Safety Tests
+// ============================================================================
+
+TEST_F(SecretsServiceTest, GetApiKey_ConcurrentAccess_IsThreadSafe) {
+    // Arrange
+    SecretsService service(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Act - Multiple threads accessing getApiKey concurrently
     auto worker = [&service]() {
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < THREAD_ITERATION_COUNT; ++i) {
             service.getApiKey();
         }
     };
@@ -92,19 +190,47 @@ TEST_F(SecretsServiceTest, ThreadSafety) {
     t2.join();
     t3.join();
 
-    // If no crash, thread safety is maintained
-    SUCCEED();
+    // Assert
+    SUCCEED()
+        << "If no crash occurred, thread safety is maintained for concurrent getApiKey calls";
 }
 
-// Test different region configurations
-TEST_F(SecretsServiceTest, DifferentRegions) {
-    SecretsService service_us_east("secret", "us-east-1", 300, true);
-    SecretsService service_eu_west("secret", "eu-west-1", 300, true);
-    SecretsService service_ap_south("secret", "ap-south-1", 300, true);
+// ============================================================================
+// Multi-Region Configuration Tests
+// ============================================================================
 
-    EXPECT_EQ("secret", service_us_east.getSecretName());
-    EXPECT_EQ("secret", service_eu_west.getSecretName());
-    EXPECT_EQ("secret", service_ap_south.getSecretName());
+TEST_F(SecretsServiceTest, Constructor_WithDifferentRegions_StoresCorrectly) {
+    // Arrange & Act - Create services with different regions
+    SecretsService service_us_east(
+        TEST_SECRET_NAME,
+        TEST_REGION,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    SecretsService service_eu_west(
+        TEST_SECRET_NAME,
+        TEST_REGION_EU_WEST,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    SecretsService service_ap_south(
+        TEST_SECRET_NAME,
+        TEST_REGION_AP_SOUTH,
+        SECRETS_CACHE_TTL_DEFAULT,
+        SKIP_AWS_INIT
+    );
+
+    // Assert - All should store the secret name correctly
+    EXPECT_EQ(TEST_SECRET_NAME, service_us_east.getSecretName())
+        << "US East service should store secret name correctly";
+
+    EXPECT_EQ(TEST_SECRET_NAME, service_eu_west.getSecretName())
+        << "EU West service should store secret name correctly";
+
+    EXPECT_EQ(TEST_SECRET_NAME, service_ap_south.getSecretName())
+        << "AP South service should store secret name correctly";
 }
 
 // Note: Integration tests with actual AWS Secrets Manager would require:
