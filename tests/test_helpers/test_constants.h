@@ -137,6 +137,55 @@ constexpr std::time_t TEST_TIMESTAMP_CREATED = 1234567890;
 constexpr std::time_t TEST_TIMESTAMP_UPDATED = 1234567900;
 constexpr std::time_t TIMESTAMP_ZERO = 0;
 
+// HTTP Header constants
+const std::string HTTP_HEADER_API_KEY = "X-API-Key";
+const std::string HTTP_HEADER_API_KEY_LOWERCASE = "x-api-key";
+const std::string HTTP_HEADER_AUTHORIZATION = "Authorization";
+const std::string HTTP_HEADER_CONTENT_TYPE = "Content-Type";
+const std::string HTTP_CONTENT_TYPE_JSON = "application/json";
+
+// HTTP Status codes
+constexpr int HTTP_STATUS_UNAUTHORIZED = 401;
+
+// API Key test values
+const std::string TEST_API_KEY_VALID = "test-api-key-123";
+const std::string TEST_API_KEY_LOWERCASE = "test-key-lowercase";
+const std::string TEST_API_KEY_CORRECT = "correct-key";
+const std::string TEST_API_KEY_WRONG = "wrong-key";
+const std::string TEST_API_KEY_SOME = "some-key";
+const std::string TEST_API_KEY_SECRET = "my-secret-api-key-12345";
+const std::string TEST_API_KEY_SPECIAL_CHARS = "api-key!@#$%^&*()";
+const std::string TEST_API_KEY_SPECIAL_CHARS_DIFFERENT = "api-key!@#$%^&*(?)";
+const std::string TEST_BEARER_TOKEN = "Bearer token123";
+
+// Test string constants
+const std::string EMPTY_STRING = "";
+const std::string TEST_STRING_EQUAL_A = "test123";
+const std::string TEST_STRING_EQUAL_B = "test123";
+const std::string TEST_STRING_123 = "test123";
+const std::string TEST_STRING_456 = "test456";
+const std::string TEST_STRING_SHORT = "short";
+const std::string TEST_STRING_LONG = "much-longer-string";
+const std::string TEST_STRING_TINY = "tiny";
+const std::string TEST_STRING_TEST = "test";
+const std::string TEST_STRING_MIXED_CASE = "TestKey";
+const std::string TEST_STRING_LOWER_CASE = "testkey";
+
+// Timing attack test strings
+const std::string TEST_TIMING_KEY_ALL_A = "aaaaaaaaaaaaaaaaaaaa";
+const std::string TEST_TIMING_KEY_ALL_Z = "zzzzzzzzzzzzzzzzzzzz";
+const std::string TEST_TIMING_KEY_LAST_DIFF = "aaaaaaaaaaaaaaaaaaab";
+
+// Error message constants
+const std::string ERROR_MESSAGE_TEST = "Test error message";
+const std::string ERROR_MESSAGE_MISSING_KEY = "Missing X-API-Key header";
+const std::string ERROR_MESSAGE_INVALID_KEY = "Invalid API key";
+const std::string ERROR_UNAUTHORIZED_TEXT = "Unauthorized";
+
+// JSON key constants
+const std::string JSON_KEY_ERROR = "\"error\"";
+const std::string JSON_KEY_MESSAGE = "\"message\"";
+
 } // namespace test_constants
 } // namespace gara
 

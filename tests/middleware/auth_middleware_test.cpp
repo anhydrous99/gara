@@ -1,8 +1,12 @@
 #include <gtest/gtest.h>
 #include "middleware/auth_middleware.h"
+#include "test_helpers/test_constants.h"
+#include "test_helpers/custom_matchers.h"
 #include <crow.h>
 
 using namespace gara::middleware;
+using namespace gara::test_constants;
+using namespace gara::test_matchers;
 
 class AuthMiddlewareTest : public ::testing::Test {
 protected:
@@ -20,180 +24,307 @@ protected:
     }
 };
 
-// Test extractApiKey with valid X-API-Key header
-TEST_F(AuthMiddlewareTest, ExtractApiKeyValid) {
-    auto req = createMockRequest({{"X-API-Key", "test-api-key-123"}});
+// ============================================================================
+// API Key Extraction Tests
+// ============================================================================
 
+TEST_F(AuthMiddlewareTest, ExtractApiKey_WithValidHeader_ReturnsKey) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, TEST_API_KEY_VALID}});
+
+    // Act
     std::string extracted = AuthMiddleware::extractApiKey(req);
-    EXPECT_EQ("test-api-key-123", extracted);
+
+    // Assert
+    EXPECT_EQ(TEST_API_KEY_VALID, extracted)
+        << "Should extract API key from X-API-Key header";
 }
 
-// Test extractApiKey with lowercase header
-TEST_F(AuthMiddlewareTest, ExtractApiKeyLowercase) {
-    auto req = createMockRequest({{"x-api-key", "test-key-lowercase"}});
+TEST_F(AuthMiddlewareTest, ExtractApiKey_WithLowercaseHeader_ReturnsKey) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY_LOWERCASE, TEST_API_KEY_LOWERCASE}});
 
+    // Act
     std::string extracted = AuthMiddleware::extractApiKey(req);
-    EXPECT_EQ("test-key-lowercase", extracted);
+
+    // Assert
+    EXPECT_EQ(TEST_API_KEY_LOWERCASE, extracted)
+        << "Should extract API key from lowercase header (case-insensitive)";
 }
 
-// Test extractApiKey with missing header
-TEST_F(AuthMiddlewareTest, ExtractApiKeyMissing) {
+TEST_F(AuthMiddlewareTest, ExtractApiKey_WithMissingHeader_ReturnsEmpty) {
+    // Arrange
     auto req = createMockRequest({});
 
+    // Act
     std::string extracted = AuthMiddleware::extractApiKey(req);
-    EXPECT_TRUE(extracted.empty());
+
+    // Assert
+    EXPECT_TRUE(extracted.empty())
+        << "Should return empty string when X-API-Key header is missing";
 }
 
-// Test extractApiKey with different header
-TEST_F(AuthMiddlewareTest, ExtractApiKeyWrongHeader) {
-    auto req = createMockRequest({{"Authorization", "Bearer token123"}});
+TEST_F(AuthMiddlewareTest, ExtractApiKey_WithWrongHeader_ReturnsEmpty) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_AUTHORIZATION, TEST_BEARER_TOKEN}});
 
+    // Act
     std::string extracted = AuthMiddleware::extractApiKey(req);
-    EXPECT_TRUE(extracted.empty());
+
+    // Assert
+    EXPECT_TRUE(extracted.empty())
+        << "Should return empty string when using Authorization header instead of X-API-Key";
 }
 
-// Test validateApiKey with valid key
-TEST_F(AuthMiddlewareTest, ValidateApiKeyValid) {
-    auto req = createMockRequest({{"X-API-Key", "correct-key"}});
+// ============================================================================
+// API Key Validation Tests
+// ============================================================================
 
-    bool result = AuthMiddleware::validateApiKey(req, "correct-key");
-    EXPECT_TRUE(result);
+TEST_F(AuthMiddlewareTest, ValidateApiKey_WithCorrectKey_ReturnsTrue) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, TEST_API_KEY_CORRECT}});
+
+    // Act
+    bool result = AuthMiddleware::validateApiKey(req, TEST_API_KEY_CORRECT);
+
+    // Assert
+    EXPECT_TRUE(result)
+        << "Should validate successfully when API key matches expected key";
 }
 
-// Test validateApiKey with invalid key
-TEST_F(AuthMiddlewareTest, ValidateApiKeyInvalid) {
-    auto req = createMockRequest({{"X-API-Key", "wrong-key"}});
+TEST_F(AuthMiddlewareTest, ValidateApiKey_WithWrongKey_ReturnsFalse) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, TEST_API_KEY_WRONG}});
 
-    bool result = AuthMiddleware::validateApiKey(req, "correct-key");
-    EXPECT_FALSE(result);
+    // Act
+    bool result = AuthMiddleware::validateApiKey(req, TEST_API_KEY_CORRECT);
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Should fail validation when API key does not match expected key";
 }
 
-// Test validateApiKey with missing key
-TEST_F(AuthMiddlewareTest, ValidateApiKeyMissing) {
+TEST_F(AuthMiddlewareTest, ValidateApiKey_WithMissingKey_ReturnsFalse) {
+    // Arrange
     auto req = createMockRequest({});
 
-    bool result = AuthMiddleware::validateApiKey(req, "correct-key");
-    EXPECT_FALSE(result);
+    // Act
+    bool result = AuthMiddleware::validateApiKey(req, TEST_API_KEY_CORRECT);
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Should fail validation when API key header is missing";
 }
 
-// Test validateApiKey with empty expected key
-TEST_F(AuthMiddlewareTest, ValidateApiKeyEmptyExpected) {
-    auto req = createMockRequest({{"X-API-Key", "some-key"}});
+TEST_F(AuthMiddlewareTest, ValidateApiKey_WithEmptyExpectedKey_ReturnsFalse) {
+    // Arrange
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, TEST_API_KEY_SOME}});
 
-    bool result = AuthMiddleware::validateApiKey(req, "");
-    EXPECT_FALSE(result);
+    // Act
+    bool result = AuthMiddleware::validateApiKey(req, EMPTY_STRING);
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Should fail validation when expected key is empty";
 }
 
-// Test constantTimeCompare with equal strings
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareEqual) {
-    bool result = AuthMiddleware::constantTimeCompare("test123", "test123");
-    EXPECT_TRUE(result);
+// ============================================================================
+// Constant Time Comparison Tests
+// ============================================================================
+
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_WithEqualStrings_ReturnsTrue) {
+    // Arrange & Act
+    bool result = AuthMiddleware::constantTimeCompare(
+        TEST_STRING_EQUAL_A,
+        TEST_STRING_EQUAL_B
+    );
+
+    // Assert
+    EXPECT_TRUE(result)
+        << "Should return true for identical strings";
 }
 
-// Test constantTimeCompare with different strings
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareDifferent) {
-    bool result = AuthMiddleware::constantTimeCompare("test123", "test456");
-    EXPECT_FALSE(result);
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_WithDifferentStrings_ReturnsFalse) {
+    // Arrange & Act
+    bool result = AuthMiddleware::constantTimeCompare(
+        TEST_STRING_123,
+        TEST_STRING_456
+    );
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Should return false for different strings";
 }
 
-// Test constantTimeCompare with different lengths
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareDifferentLengths) {
-    bool result1 = AuthMiddleware::constantTimeCompare("short", "much-longer-string");
-    bool result2 = AuthMiddleware::constantTimeCompare("long-string", "tiny");
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_WithDifferentLengths_ReturnsFalse) {
+    // Arrange & Act
+    bool result1 = AuthMiddleware::constantTimeCompare(
+        TEST_STRING_SHORT,
+        TEST_STRING_LONG
+    );
+    bool result2 = AuthMiddleware::constantTimeCompare(
+        TEST_STRING_LONG,
+        TEST_STRING_TINY
+    );
 
-    EXPECT_FALSE(result1);
-    EXPECT_FALSE(result2);
+    // Assert
+    EXPECT_FALSE(result1)
+        << "Should return false when first string is shorter";
+
+    EXPECT_FALSE(result2)
+        << "Should return false when second string is shorter";
 }
 
-// Test constantTimeCompare with empty strings
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareEmpty) {
-    bool result1 = AuthMiddleware::constantTimeCompare("", "");
-    bool result2 = AuthMiddleware::constantTimeCompare("test", "");
-    bool result3 = AuthMiddleware::constantTimeCompare("", "test");
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_WithEmptyStrings_HandlesCorrectly) {
+    // Arrange & Act
+    bool result_both_empty = AuthMiddleware::constantTimeCompare(EMPTY_STRING, EMPTY_STRING);
+    bool result_first_empty = AuthMiddleware::constantTimeCompare(TEST_STRING_TEST, EMPTY_STRING);
+    bool result_second_empty = AuthMiddleware::constantTimeCompare(EMPTY_STRING, TEST_STRING_TEST);
 
-    EXPECT_TRUE(result1);   // Both empty
-    EXPECT_FALSE(result2);  // One empty
-    EXPECT_FALSE(result3);  // One empty
+    // Assert
+    EXPECT_TRUE(result_both_empty)
+        << "Should return true when both strings are empty";
+
+    EXPECT_FALSE(result_first_empty)
+        << "Should return false when first string is not empty but second is";
+
+    EXPECT_FALSE(result_second_empty)
+        << "Should return false when second string is not empty but first is";
 }
 
-// Test constantTimeCompare case sensitivity
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareCaseSensitive) {
-    bool result = AuthMiddleware::constantTimeCompare("TestKey", "testkey");
-    EXPECT_FALSE(result);  // Should be case-sensitive
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_IsCaseSensitive_ReturnsFalse) {
+    // Arrange & Act
+    bool result = AuthMiddleware::constantTimeCompare(
+        TEST_STRING_MIXED_CASE,
+        TEST_STRING_LOWER_CASE
+    );
+
+    // Assert
+    EXPECT_FALSE(result)
+        << "Comparison should be case-sensitive (TestKey != testkey)";
 }
 
-// Test constantTimeCompare with special characters
-TEST_F(AuthMiddlewareTest, ConstantTimeCompareSpecialChars) {
-    std::string key1 = "api-key!@#$%^&*()";
-    std::string key2 = "api-key!@#$%^&*()";
-    std::string key3 = "api-key!@#$%^&*(?";
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_WithSpecialChars_ComparesCorrectly) {
+    // Arrange
+    std::string key1 = TEST_API_KEY_SPECIAL_CHARS;
+    std::string key2 = TEST_API_KEY_SPECIAL_CHARS;
+    std::string key3 = TEST_API_KEY_SPECIAL_CHARS_DIFFERENT;
 
-    EXPECT_TRUE(AuthMiddleware::constantTimeCompare(key1, key2));
-    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key1, key3));
+    // Act & Assert
+    EXPECT_TRUE(AuthMiddleware::constantTimeCompare(key1, key2))
+        << "Should return true for identical strings with special characters";
+
+    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key1, key3))
+        << "Should return false when special character strings differ";
 }
 
-// Test unauthorizedResponse format
-TEST_F(AuthMiddlewareTest, UnauthorizedResponseFormat) {
-    crow::response resp = AuthMiddleware::unauthorizedResponse("Test error message");
+// ============================================================================
+// Unauthorized Response Tests
+// ============================================================================
 
-    EXPECT_EQ(401, resp.code);
-    EXPECT_EQ("application/json", resp.get_header_value("Content-Type"));
+TEST_F(AuthMiddlewareTest, UnauthorizedResponse_WithCustomMessage_ReturnsCorrectFormat) {
+    // Arrange & Act
+    crow::response resp = AuthMiddleware::unauthorizedResponse(ERROR_MESSAGE_TEST);
 
-    // Parse JSON response
+    // Assert
+    EXPECT_EQ(HTTP_STATUS_UNAUTHORIZED, resp.code)
+        << "Response should have 401 Unauthorized status code";
+
+    EXPECT_EQ(HTTP_CONTENT_TYPE_JSON, resp.get_header_value(HTTP_HEADER_CONTENT_TYPE))
+        << "Response should have JSON content type";
+
+    // Verify JSON structure
     std::string body = resp.body;
-    EXPECT_NE(std::string::npos, body.find("\"error\""));
-    EXPECT_NE(std::string::npos, body.find("\"Unauthorized\""));
-    EXPECT_NE(std::string::npos, body.find("\"message\""));
-    EXPECT_NE(std::string::npos, body.find("Test error message"));
+    EXPECT_THAT(body, ContainsSubstring(JSON_KEY_ERROR))
+        << "Response body should contain 'error' field";
+
+    EXPECT_THAT(body, ContainsSubstring(ERROR_UNAUTHORIZED_TEXT))
+        << "Response body should contain 'Unauthorized' error type";
+
+    EXPECT_THAT(body, ContainsSubstring(JSON_KEY_MESSAGE))
+        << "Response body should contain 'message' field";
+
+    EXPECT_THAT(body, ContainsSubstring(ERROR_MESSAGE_TEST))
+        << "Response body should contain custom error message";
 }
 
-// Test unauthorizedResponse with missing key message
-TEST_F(AuthMiddlewareTest, UnauthorizedResponseMissingKey) {
-    crow::response resp = AuthMiddleware::unauthorizedResponse("Missing X-API-Key header");
+TEST_F(AuthMiddlewareTest, UnauthorizedResponse_WithMissingKeyMessage_IncludesMessage) {
+    // Arrange & Act
+    crow::response resp = AuthMiddleware::unauthorizedResponse(ERROR_MESSAGE_MISSING_KEY);
 
-    EXPECT_EQ(401, resp.code);
-    EXPECT_NE(std::string::npos, resp.body.find("Missing X-API-Key header"));
+    // Assert
+    EXPECT_EQ(HTTP_STATUS_UNAUTHORIZED, resp.code)
+        << "Response should have 401 status for missing key";
+
+    EXPECT_THAT(resp.body, ContainsSubstring(ERROR_MESSAGE_MISSING_KEY))
+        << "Response should include missing key error message";
 }
 
-// Test unauthorizedResponse with invalid key message
-TEST_F(AuthMiddlewareTest, UnauthorizedResponseInvalidKey) {
-    crow::response resp = AuthMiddleware::unauthorizedResponse("Invalid API key");
+TEST_F(AuthMiddlewareTest, UnauthorizedResponse_WithInvalidKeyMessage_IncludesMessage) {
+    // Arrange & Act
+    crow::response resp = AuthMiddleware::unauthorizedResponse(ERROR_MESSAGE_INVALID_KEY);
 
-    EXPECT_EQ(401, resp.code);
-    EXPECT_NE(std::string::npos, resp.body.find("Invalid API key"));
+    // Assert
+    EXPECT_EQ(HTTP_STATUS_UNAUTHORIZED, resp.code)
+        << "Response should have 401 status for invalid key";
+
+    EXPECT_THAT(resp.body, ContainsSubstring(ERROR_MESSAGE_INVALID_KEY))
+        << "Response should include invalid key error message";
 }
 
-// Test full authentication flow - valid
-TEST_F(AuthMiddlewareTest, FullAuthenticationFlowValid) {
-    std::string expected_key = "my-secret-api-key-12345";
-    auto req = createMockRequest({{"X-API-Key", expected_key}});
+// ============================================================================
+// Full Authentication Flow Tests
+// ============================================================================
 
+TEST_F(AuthMiddlewareTest, FullAuthFlow_WithValidKey_AuthenticatesSuccessfully) {
+    // Arrange
+    std::string expected_key = TEST_API_KEY_SECRET;
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, expected_key}});
+
+    // Act
     bool authenticated = AuthMiddleware::validateApiKey(req, expected_key);
-    EXPECT_TRUE(authenticated);
+
+    // Assert
+    EXPECT_TRUE(authenticated)
+        << "Full authentication flow should succeed with correct API key";
 }
 
-// Test full authentication flow - invalid
-TEST_F(AuthMiddlewareTest, FullAuthenticationFlowInvalid) {
-    std::string expected_key = "my-secret-api-key-12345";
-    auto req = createMockRequest({{"X-API-Key", "wrong-key"}});
+TEST_F(AuthMiddlewareTest, FullAuthFlow_WithInvalidKey_FailsAndReturns401) {
+    // Arrange
+    std::string expected_key = TEST_API_KEY_SECRET;
+    auto req = createMockRequest({{HTTP_HEADER_API_KEY, TEST_API_KEY_WRONG}});
 
+    // Act
     bool authenticated = AuthMiddleware::validateApiKey(req, expected_key);
-    EXPECT_FALSE(authenticated);
 
+    // Assert
+    EXPECT_FALSE(authenticated)
+        << "Authentication should fail with wrong API key";
+
+    // Verify error response format
     if (!authenticated) {
-        crow::response error_resp = AuthMiddleware::unauthorizedResponse("Invalid API key");
-        EXPECT_EQ(401, error_resp.code);
+        crow::response error_resp = AuthMiddleware::unauthorizedResponse(ERROR_MESSAGE_INVALID_KEY);
+        EXPECT_EQ(HTTP_STATUS_UNAUTHORIZED, error_resp.code)
+            << "Failed authentication should return 401 status";
     }
 }
 
-// Test timing attack resistance (basic test)
-TEST_F(AuthMiddlewareTest, TimingAttackResistance) {
-    std::string key1 = "aaaaaaaaaaaaaaaaaaaa";
-    std::string key2 = "zzzzzzzzzzzzzzzzzzzz";
-    std::string key3 = "aaaaaaaaaaaaaaaaaaab";  // Only last char different
+// ============================================================================
+// Timing Attack Resistance Tests
+// ============================================================================
 
+TEST_F(AuthMiddlewareTest, ConstantTimeCompare_ResistsTimingAttacks_ReturnsCorrectly) {
+    // Arrange - Strings designed to test timing attack resistance
+    std::string key_all_a = TEST_TIMING_KEY_ALL_A;
+    std::string key_all_z = TEST_TIMING_KEY_ALL_Z;
+    std::string key_last_diff = TEST_TIMING_KEY_LAST_DIFF;  // Only last char different
+
+    // Act & Assert
     // All should return false, and ideally take similar time
     // (We can't easily test timing here, but we test correctness)
-    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key1, key2));
-    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key1, key3));
+    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key_all_a, key_all_z))
+        << "Should correctly compare strings with all different characters";
+
+    EXPECT_FALSE(AuthMiddleware::constantTimeCompare(key_all_a, key_last_diff))
+        << "Should correctly compare strings with only last character different";
 }
