@@ -12,7 +12,6 @@
 
 using namespace gara;
 using namespace gara::utils;
-using namespace gara::testing;
 using namespace gara::exceptions;
 
 class ErrorHandlingTest : public ::testing::Test {
