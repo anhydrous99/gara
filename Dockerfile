@@ -1,19 +1,20 @@
 # Builder stage
-FROM alpine:latest AS builder
+FROM ubuntu:24.04 AS builder
 
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache \
-    build-base \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     cmake \
     git \
-    pkgconfig \
-    zlib-dev \
-    openssl-dev \
-    curl-dev \
-    vips-dev \
-    glib-dev
+    pkg-config \
+    zlib1g-dev \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libvips-dev \
+    libglib2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
@@ -36,17 +37,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     zlib1g \
     libstdc++6 \
+    libvips42t64 \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary from builder stage
 COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
-
-# Copy libvips shared libraries from builder
-# Ubuntu doesn't have separate libvips-cpp packages, so we copy the compiled libraries from Alpine
-COPY --from=builder /usr/lib/libvips.so* /usr/lib/
-COPY --from=builder /usr/lib/libvips-cpp.so* /usr/lib/
 
 # Create non-root user
 RUN groupadd -g 10000 crowuser && useradd -u 10000 -g crowuser -s /usr/sbin/nologin crowuser
