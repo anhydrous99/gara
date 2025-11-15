@@ -65,13 +65,13 @@ public:
         return TransformRequestBuilder().build();
     }
 
-    static TransformRequest withSize(int width, int height) {
+    static TransformRequest createWithSize(int width, int height) {
         return TransformRequestBuilder()
             .withDimensions(width, height)
             .build();
     }
 
-    static TransformRequest withFormat(const std::string& format) {
+    static TransformRequest createWithFormat(const std::string& format) {
         return TransformRequestBuilder()
             .withFormat(format)
             .build();
@@ -133,13 +133,13 @@ public:
         return CreateAlbumRequestBuilder().build();
     }
 
-    static CreateAlbumRequest withName(const std::string& name) {
+    static CreateAlbumRequest createWithName(const std::string& name) {
         return CreateAlbumRequestBuilder()
             .withName(name)
             .build();
     }
 
-    static CreateAlbumRequest publishedAlbum(const std::string& name) {
+    static CreateAlbumRequest createPublished(const std::string& name) {
         return CreateAlbumRequestBuilder()
             .withName(name)
             .published(true)
@@ -239,7 +239,7 @@ public:
         return req;
     }
 
-    static AddImagesRequest withImages(const std::vector<std::string>& ids) {
+    static AddImagesRequest createWithImages(const std::vector<std::string>& ids) {
         return AddImagesRequestBuilder()
             .withImageIds(ids)
             .build();
