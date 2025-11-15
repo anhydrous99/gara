@@ -6,6 +6,7 @@
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+#include <thread>
 
 namespace gara {
 namespace test_helpers {

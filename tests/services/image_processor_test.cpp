@@ -10,7 +10,6 @@
 
 using namespace gara;
 using namespace gara::utils;
-using namespace gara::testing;
 using namespace gara::test_constants;
 using namespace gara::test_helpers;
 using namespace gara::test_matchers;
