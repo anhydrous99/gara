@@ -1,4 +1,6 @@
 #include "image_processor.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -13,9 +15,11 @@ ImageProcessor::~ImageProcessor() {
 
 bool ImageProcessor::initialize() {
     if (VIPS_INIT("gara")) {
-        std::cerr << "Failed to initialize libvips" << std::endl;
+        LOG_CRITICAL("Failed to initialize libvips");
+        METRICS_COUNT("LibVipsErrors", 1.0, "Count", {{"error_type", "init_failed"}});
         return false;
     }
+    LOG_INFO("libvips initialized successfully");
     return true;
 }
 
@@ -29,6 +33,11 @@ bool ImageProcessor::transform(const std::string& input_path,
                               int target_width,
                               int target_height,
                               int quality) {
+    auto timer = gara::Metrics::get()->start_timer("ImageProcessingDuration", {
+        {"operation", "transform"},
+        {"format", target_format}
+    });
+
     try {
         // Load image
         vips::VImage image = vips::VImage::new_from_file(input_path.c_str());
@@ -74,10 +83,26 @@ bool ImageProcessor::transform(const std::string& input_path,
         // Save image with options
         image.write_to_file(output_path.c_str(), save_options);
 
+        METRICS_COUNT("ImageTransformations", 1.0, "Count", {
+            {"format", target_format},
+            {"status", "success"}
+        });
+
         return true;
 
     } catch (vips::VError& e) {
-        std::cerr << "Image processing error: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Image transformation failed", {
+            {"input_path", input_path},
+            {"output_path", output_path},
+            {"target_format", target_format},
+            {"target_width", target_width},
+            {"target_height", target_height},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("ImageTransformations", 1.0, "Count", {
+            {"format", target_format},
+            {"status", "error"}
+        });
         return false;
     }
 }
@@ -106,7 +131,10 @@ ImageInfo ImageProcessor::getImageInfo(const std::string& filepath) {
         info.size_bytes = info.width * info.height * bands;
 
     } catch (vips::VError& e) {
-        std::cerr << "Failed to get image info: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to get image info", {
+            {"filepath", filepath},
+            {"error", e.what()}
+        });
     }
 
     return info;
