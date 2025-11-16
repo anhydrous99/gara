@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
     libvips-dev \
     libglib2.0-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
