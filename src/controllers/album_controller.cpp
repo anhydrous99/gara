@@ -3,8 +3,9 @@
 #include "../models/image_metadata.h"
 #include "../constants/album_constants.h"
 #include "../exceptions/album_exceptions.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <nlohmann/json.hpp>
-#include <iostream>
 
 using json = nlohmann::json;
 
@@ -191,14 +192,31 @@ crow::response AlbumController::handleAuthenticatedJsonRequest(const crow::reque
         auto request = RequestType::fromJson(body);
         return handler(request);
     } catch (const json::exception& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API JSON parse error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "json_parse"}});
         return buildErrorResponse(400, constants::ERROR_INVALID_JSON, e.what());
     } catch (const exceptions::NotFoundException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "not_found"}});
         return buildErrorResponse(404, "Not Found", e.what());
     } catch (const exceptions::ValidationException& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API validation error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "validation"}});
         return buildErrorResponse(400, constants::ERROR_VALIDATION, e.what());
     } catch (const exceptions::ConflictException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "conflict"}});
         return buildErrorResponse(409, "Conflict", e.what());
     } catch (const std::exception& e) {
+        gara::Logger::log_structured(spdlog::level::err, "Album API unexpected error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "unexpected"}});
         return buildErrorResponse(default_error_code,
             default_error_code == 400 ? "Bad Request" : "Internal Server Error",
             e.what());
@@ -210,10 +228,21 @@ crow::response AlbumController::handleJsonRequest(const crow::request& req, Hand
     try {
         return handler();
     } catch (const exceptions::NotFoundException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "not_found"}});
         return buildErrorResponse(404, "Not Found", e.what());
     } catch (const exceptions::ValidationException& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API validation error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "validation"}});
         return buildErrorResponse(400, constants::ERROR_VALIDATION, e.what());
     } catch (const std::exception& e) {
+        gara::Logger::log_structured(spdlog::level::err, "Album API unexpected error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "unexpected"}});
         return buildErrorResponse(default_error_code,
             default_error_code == 500 ? "Internal Server Error" : "Bad Request",
             e.what());
