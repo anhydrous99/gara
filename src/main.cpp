@@ -131,16 +131,16 @@ int main() {
 
     // Get port from environment
     char* port_env = std::getenv("PORT");
-    int port = 80;
+    int port = 8080;
     if (port_env) {
         try {
             port = std::stoi(port_env);
             if (port <= 0 || port > 65535) {
-                std::cerr << "Invalid port number, using default 80" << std::endl;
-                port = 80;
+                std::cerr << "Invalid port number, using default 8080" << std::endl;
+                port = 8080;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Invalid PORT value, using default 80" << std::endl;
+            std::cerr << "Invalid PORT value, using default 8080" << std::endl;
         }
     }
 

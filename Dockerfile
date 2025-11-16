@@ -51,9 +51,9 @@ RUN groupadd -g 10000 crowuser && useradd -u 10000 -g crowuser -s /usr/sbin/nolo
 
 USER crowuser
 
-EXPOSE 80
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:80/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 CMD ["gara-image"]
