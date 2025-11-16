@@ -1,6 +1,7 @@
 #include "cache_manager.h"
 #include "../utils/file_utils.h"
-#include <iostream>
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 
 namespace gara {
 
@@ -24,15 +25,31 @@ std::string CacheManager::getCachedImage(const TransformRequest& request) {
 }
 
 bool CacheManager::storeInCache(const TransformRequest& request, const std::string& local_path) {
+    auto timer = gara::Metrics::get()->start_timer("CacheDuration", {{"operation", "put"}});
+
     std::string s3_key = getS3Key(request);
     std::string content_type = utils::FileUtils::getMimeType(request.target_format);
 
     bool success = s3_service_->uploadFile(local_path, s3_key, content_type);
 
     if (success) {
-        std::cout << "Cached transformed image: " << s3_key << std::endl;
+        gara::Logger::log_structured(spdlog::level::info, "Cached transformed image", {
+            {"s3_key", s3_key},
+            {"image_id", request.image_id},
+            {"format", request.target_format},
+            {"width", request.width},
+            {"height", request.height},
+            {"watermarked", request.watermarked}
+        });
+        METRICS_COUNT("CacheOperations", 1.0, "Count", {{"operation", "put"}, {"status", "success"}});
     } else {
-        std::cerr << "Failed to cache transformed image: " << s3_key << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to cache transformed image", {
+            {"s3_key", s3_key},
+            {"image_id", request.image_id},
+            {"format", request.target_format},
+            {"local_path", local_path}
+        });
+        METRICS_COUNT("CacheOperations", 1.0, "Count", {{"operation", "put"}, {"status", "failure"}});
     }
 
     return success;
@@ -52,8 +69,12 @@ bool CacheManager::clearImageCache(const std::string& image_id) {
     // In a production system, you'd want to list all objects with prefix
     // and delete them. For now, this is a placeholder.
     // You could use S3 ListObjectsV2 to find all transformed versions
-    std::cerr << "clearImageCache not fully implemented - would delete all transformations for: "
-              << image_id << std::endl;
+    gara::Logger::log_structured(spdlog::level::warn, "clearImageCache not fully implemented", {
+        {"image_id", image_id},
+        {"operation", "clear_all_transformations"},
+        {"status", "not_implemented"}
+    });
+    METRICS_COUNT("CacheOperations", 1.0, "Count", {{"operation", "clear_all"}, {"status", "not_implemented"}});
     return false;
 }
 
