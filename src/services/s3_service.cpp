@@ -1,4 +1,6 @@
 #include "s3_service.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
@@ -35,17 +37,45 @@ bool S3Service::uploadFile(const std::string& local_path, const std::string& s3_
 
     if (!input_data->is_open()) {
         std::cerr << "Failed to open file: " << local_path << std::endl;
+
+        // Example: Structured error logging
+        gara::Logger::log_structured(spdlog::level::err, "Failed to open file for S3 upload", {
+            {"local_path", local_path},
+            {"s3_key", s3_key},
+            {"operation", "s3_upload"}
+        });
+
+        METRICS_COUNT("S3Errors", 1.0, "Count", {{"error_type", "file_not_found"}});
+
         return false;
     }
 
     request.SetBody(input_data);
 
+    // Start timing S3 upload
+    auto timer = gara::Metrics::get()->start_timer("S3UploadDuration", {{"operation", "put_object"}});
+
     auto outcome = s3_client_->PutObject(request);
 
     if (!outcome.IsSuccess()) {
         std::cerr << "S3 Upload Error: " << outcome.GetError().GetMessage() << std::endl;
+
+        // Example: Structured error logging for AWS errors
+        gara::Logger::log_structured(spdlog::level::err, "S3 upload failed", {
+            {"s3_key", s3_key},
+            {"bucket", bucket_name_},
+            {"error_code", outcome.GetError().GetExceptionName()},
+            {"error_message", outcome.GetError().GetMessage()},
+            {"operation", "s3_upload"}
+        });
+
+        METRICS_COUNT("S3Errors", 1.0, "Count", {{"error_type", "upload_failed"}});
+
         return false;
     }
+
+    // Track successful upload
+    METRICS_COUNT("S3Operations", 1.0, "Count", {{"operation", "upload"}, {"status", "success"}});
 
     return true;
 }

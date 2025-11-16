@@ -1,5 +1,7 @@
 #include "image_controller.h"
 #include "../utils/file_utils.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include "../models/image_metadata.h"
 #include "../middleware/auth_middleware.h"
 #include <nlohmann/json.hpp>
@@ -21,25 +23,7 @@ ImageController::ImageController(std::shared_ptr<S3Service> s3_service,
       watermark_service_(watermark_service) {
 }
 
-void ImageController::registerRoutes(crow::SimpleApp& app) {
-    // Upload image
-    CROW_ROUTE(app, "/api/images/upload").methods("POST"_method)
-    ([this](const crow::request& req) {
-        return handleUpload(req);
-    });
-
-    // Get/transform image
-    CROW_ROUTE(app, "/api/images/<string>")
-    ([this](const crow::request& req, const std::string& image_id) {
-        return handleGetImage(req, image_id);
-    });
-
-    // Health check
-    CROW_ROUTE(app, "/api/images/health")
-    ([this](const crow::request& req) {
-        return handleHealthCheck(req);
-    });
-}
+// registerRoutes is now a template method in the header
 
 crow::response ImageController::handleUpload(const crow::request& req) {
     try {
@@ -309,14 +293,39 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
 }
 
 std::string ImageController::getOrCreateTransformed(const TransformRequest& request) {
+    // Start timing the operation
+    auto timer = gara::Metrics::get()->start_timer("ImageTransformDuration");
+
     // Check cache first
     std::string cached_key = cache_manager_->getCachedImage(request);
     if (!cached_key.empty()) {
         std::cout << "Cache hit for: " << cached_key << std::endl;
+
+        // Example: Structured logging with context
+        gara::Logger::log_structured(spdlog::level::info, "Cache hit", {
+            {"cache_key", cached_key},
+            {"image_id", request.image_id},
+            {"operation", "transform"}
+        });
+
+        // Example: Metrics - track cache hit
+        METRICS_COUNT("CacheHits", 1.0, "Count", {{"operation", "transform"}});
+
         return cached_key;
     }
 
     std::cout << "Cache miss - creating transformation" << std::endl;
+
+    // Example: Structured logging and metrics for cache miss
+    gara::Logger::log_structured(spdlog::level::info, "Cache miss - transforming image", {
+        {"image_id", request.image_id},
+        {"width", request.width},
+        {"height", request.height},
+        {"format", request.format}
+    });
+
+    // Example: Metrics - track cache miss
+    METRICS_COUNT("CacheMisses", 1.0, "Count", {{"operation", "transform"}});
 
     // Download raw image
     std::string raw_key = "raw/" + request.image_id + ".*";

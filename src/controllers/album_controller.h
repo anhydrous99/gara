@@ -17,8 +17,9 @@ public:
         std::shared_ptr<SecretsService> secrets_service
     );
 
-    // Register routes with Crow app
-    void registerRoutes(crow::SimpleApp& app);
+    // Register routes with Crow app (templated to support middleware)
+    template<typename App>
+    void registerRoutes(App& app);
 
 private:
     std::shared_ptr<AlbumService> album_service_;
@@ -53,6 +54,94 @@ private:
     template<typename HandlerFunc>
     crow::response handleJsonRequest(const crow::request& req, HandlerFunc handler, int default_error_code = 500);
 };
+
+// Template implementation must be in header
+template<typename App>
+void AlbumController::registerRoutes(App& app) {
+    // Create album
+    CROW_ROUTE(app, "/api/albums").methods("POST"_method)
+    ([this](const crow::request& req) {
+        return handleCreateAlbum(req);
+    });
+
+    // List albums
+    CROW_ROUTE(app, "/api/albums").methods("GET"_method)
+    ([this](const crow::request& req) {
+        return handleListAlbums(req);
+    });
+
+    // Get single album
+    CROW_ROUTE(app, "/api/albums/<string>").methods("GET"_method)
+    ([this](const crow::request& req, const std::string& album_id) {
+        return handleGetAlbum(album_id, req);
+    });
+
+    // Update album
+    CROW_ROUTE(app, "/api/albums/<string>").methods("PUT"_method)
+    ([this](const crow::request& req, const std::string& album_id) {
+        return handleUpdateAlbum(album_id, req);
+    });
+
+    // Delete album
+    CROW_ROUTE(app, "/api/albums/<string>").methods("DELETE"_method)
+    ([this](const crow::request& req, const std::string& album_id) {
+        return handleDeleteAlbum(album_id, req);
+    });
+
+    // Add images to album
+    CROW_ROUTE(app, "/api/albums/<string>/images").methods("POST"_method)
+    ([this](const crow::request& req, const std::string& album_id) {
+        return handleAddImages(album_id, req);
+    });
+
+    // Remove image from album
+    CROW_ROUTE(app, "/api/albums/<string>/images/<string>").methods("DELETE"_method)
+    ([this](const crow::request& req, const std::string& album_id, const std::string& image_id) {
+        return handleRemoveImage(album_id, image_id, req);
+    });
+
+    // Reorder images in album
+    CROW_ROUTE(app, "/api/albums/<string>/reorder").methods("PUT"_method)
+    ([this](const crow::request& req, const std::string& album_id) {
+        return handleReorderImages(album_id, req);
+    });
+
+    // OPTIONS handlers for CORS preflight
+    CROW_ROUTE(app, "/api/albums").methods("OPTIONS"_method)
+    ([this](const crow::request&) {
+        crow::response resp(204);
+        addCorsHeaders(resp);
+        return resp;
+    });
+
+    CROW_ROUTE(app, "/api/albums/<string>").methods("OPTIONS"_method)
+    ([this](const crow::request&, const std::string&) {
+        crow::response resp(204);
+        addCorsHeaders(resp);
+        return resp;
+    });
+
+    CROW_ROUTE(app, "/api/albums/<string>/images").methods("OPTIONS"_method)
+    ([this](const crow::request&, const std::string&) {
+        crow::response resp(204);
+        addCorsHeaders(resp);
+        return resp;
+    });
+
+    CROW_ROUTE(app, "/api/albums/<string>/images/<string>").methods("OPTIONS"_method)
+    ([this](const crow::request&, const std::string&, const std::string&) {
+        crow::response resp(204);
+        addCorsHeaders(resp);
+        return resp;
+    });
+
+    CROW_ROUTE(app, "/api/albums/<string>/reorder").methods("OPTIONS"_method)
+    ([this](const crow::request&, const std::string&) {
+        crow::response resp(204);
+        addCorsHeaders(resp);
+        return resp;
+    });
+}
 
 } // namespace gara
 
