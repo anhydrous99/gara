@@ -23,7 +23,7 @@ struct RequestContextMiddleware {
         if (!header_id.empty()) {
             ctx.request_id = header_id;
         } else {
-            ctx.request_id = IDGenerator::generate();
+            ctx.request_id = utils::IdGenerator::generateAlbumId();
         }
 
         // Store endpoint path
