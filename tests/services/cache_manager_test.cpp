@@ -2,6 +2,8 @@
 #include "services/cache_manager.h"
 #include "models/image_metadata.h"
 #include "utils/file_utils.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include "mocks/mock_s3_service.h"
 #include "test_helpers/test_constants.h"
 #include "test_helpers/test_builders.h"
@@ -20,6 +22,10 @@ using namespace gara::test_matchers;
 class CacheManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         fake_s3_ = std::make_shared<FakeS3Service>(TEST_BUCKET_NAME, TEST_REGION);
         cache_manager_ = std::make_shared<CacheManager>(fake_s3_);
     }

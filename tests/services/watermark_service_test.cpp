@@ -3,6 +3,8 @@
 #include "services/image_processor.h"
 #include "models/watermark_config.h"
 #include "utils/file_utils.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include "test_helpers/test_constants.h"
 #include "test_helpers/test_file_manager.h"
 #include <vips/vips8>
@@ -26,6 +28,10 @@ protected:
     }
 
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         // Create default config for testing
         default_config_ = WatermarkConfig();
         default_config_.enabled = true;
