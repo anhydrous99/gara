@@ -7,6 +7,8 @@
 #include "test_helpers/test_constants.h"
 #include "test_helpers/test_builders.h"
 #include "test_helpers/custom_matchers.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include <memory>
 
 using namespace gara;
@@ -18,6 +20,10 @@ using namespace gara::test_matchers;
 class AlbumServiceTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         // Use fake services for testing
         fake_s3_ = std::make_shared<FakeS3Service>(TEST_BUCKET_NAME, TEST_REGION);
         fake_dynamodb_ = std::make_shared<FakeDynamoDBClient>();

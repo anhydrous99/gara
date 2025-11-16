@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "services/secrets_service.h"
 #include "test_helpers/test_constants.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include <thread>
 #include <chrono>
 
@@ -10,6 +12,10 @@ using namespace gara::test_constants;
 class SecretsServiceTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         // Tests will use skip_aws_init mode to avoid AWS calls
     }
 };

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "controllers/image_controller.h"
 #include "models/image_metadata.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include <nlohmann/json.hpp>
 
 using namespace gara;
@@ -9,6 +11,10 @@ using json = nlohmann::json;
 class ImageControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         // Tests for image controller would require mocking Crow requests
         // which is complex. For basic smoke tests, we'll test the helper
         // methods and data models instead.

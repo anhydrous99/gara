@@ -1,5 +1,6 @@
 #include "watermark_service.h"
-#include <iostream>
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <cmath>
 
 namespace gara {
@@ -7,7 +8,12 @@ namespace gara {
 WatermarkService::WatermarkService(const WatermarkConfig& config)
     : config_(config) {
     if (!config_.isValid()) {
-        std::cerr << "Warning: Invalid watermark configuration, using defaults" << std::endl;
+        gara::Logger::log_structured(spdlog::level::warn, "Invalid watermark configuration, using defaults", {
+            {"config_enabled", config.enabled},
+            {"config_text", config.text},
+            {"config_position", config.position},
+            {"config_opacity", config.opacity}
+        });
         config_ = WatermarkConfig();
     }
 }
@@ -17,6 +23,8 @@ WatermarkService::~WatermarkService() {
 }
 
 vips::VImage WatermarkService::applyWatermark(const vips::VImage& image) const {
+    auto timer = gara::Metrics::get()->start_timer("WatermarkDuration", {{"operation", "apply"}});
+
     try {
         // If watermarking is disabled, return original image
         if (!config_.enabled) {
@@ -51,14 +59,31 @@ vips::VImage WatermarkService::applyWatermark(const vips::VImage& image) const {
         // Then, composite white text on top
         vips::VImage result = compositeWatermark(withShadow, textImage, x, y);
 
+        METRICS_COUNT("WatermarkOperations", 1.0, "Count", {{"status", "success"}});
         return result;
 
     } catch (const vips::VError& e) {
         // Log error and return original image (graceful degradation)
-        std::cerr << "Watermark application failed: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Watermark application failed (libvips error)", {
+            {"image_width", image.width()},
+            {"image_height", image.height()},
+            {"watermark_text", config_.text},
+            {"watermark_position", config_.position},
+            {"error_type", "vips_error"},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("WatermarkOperations", 1.0, "Count", {{"status", "error"}});
         return image;
     } catch (const std::exception& e) {
-        std::cerr << "Watermark application failed: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Watermark application failed (general error)", {
+            {"image_width", image.width()},
+            {"image_height", image.height()},
+            {"watermark_text", config_.text},
+            {"watermark_position", config_.position},
+            {"error_type", "general_exception"},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("WatermarkOperations", 1.0, "Count", {{"status", "error"}});
         return image;
     }
 }
@@ -157,7 +182,12 @@ vips::VImage WatermarkService::createTextImage(const std::string& text, int font
         return textImg;
 
     } catch (const vips::VError& e) {
-        std::cerr << "Failed to create text image: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to create text image for watermark", {
+            {"text", text},
+            {"font_size", fontSize},
+            {"opacity", config_.opacity},
+            {"error", e.what()}
+        });
         throw;
     }
 }
@@ -183,7 +213,12 @@ vips::VImage WatermarkService::createShadow(const vips::VImage& textImage, int o
         return shadow;
 
     } catch (const vips::VError& e) {
-        std::cerr << "Failed to create shadow: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to create shadow for watermark", {
+            {"text_width", textImage.width()},
+            {"text_height", textImage.height()},
+            {"offset", offset},
+            {"error", e.what()}
+        });
         throw;
     }
 }
@@ -224,7 +259,15 @@ vips::VImage WatermarkService::compositeWatermark(const vips::VImage& image,
         return result;
 
     } catch (const vips::VError& e) {
-        std::cerr << "Failed to composite watermark: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to composite watermark onto image", {
+            {"image_width", image.width()},
+            {"image_height", image.height()},
+            {"watermark_width", watermark.width()},
+            {"watermark_height", watermark.height()},
+            {"position_x", x},
+            {"position_y", y},
+            {"error", e.what()}
+        });
         throw;
     }
 }

@@ -3,6 +3,8 @@
 #include "services/album_service.h"
 #include "services/secrets_service.h"
 #include "mocks/mock_s3_service.h"
+#include "utils/logger.h"
+#include "utils/metrics.h"
 #include <memory>
 #include <nlohmann/json.hpp>
 
@@ -13,6 +15,10 @@ using json = nlohmann::json;
 class AlbumControllerTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        // Initialize logger and metrics for tests
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
+
         // Use fake S3 service
         fake_s3_ = std::make_shared<FakeS3Service>("test-bucket", "us-east-1");
 

@@ -1,7 +1,8 @@
 #include "secrets_service.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <aws/secretsmanager/model/GetSecretValueRequest.h>
 #include <aws/core/utils/logging/LogMacros.h>
-#include <iostream>
 
 namespace gara {
 
@@ -31,8 +32,12 @@ SecretsService::SecretsService(
             cache_timestamp_ = std::chrono::steady_clock::now();
             initialized_ = true;
         } else {
-            std::cerr << "Warning: Failed to initialize SecretsService with secret: "
-                     << secret_name_ << std::endl;
+            gara::Logger::log_structured(spdlog::level::warn, "Failed to initialize SecretsService", {
+                {"secret_name", secret_name_},
+                {"region", region_},
+                {"operation", "initial_fetch"}
+            });
+            METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "init_failed"}});
         }
     }
 }
@@ -55,8 +60,12 @@ std::string SecretsService::getApiKey() {
             return cached_api_key_;
         } else {
             // Fetch failed, but return cached value if available (degraded mode)
-            std::cerr << "Warning: Failed to refresh API key from Secrets Manager, "
-                     << "using cached value" << std::endl;
+            gara::Logger::log_structured(spdlog::level::warn, "Failed to refresh API key from Secrets Manager, using cached value", {
+                {"secret_name", secret_name_},
+                {"operation", "refresh"},
+                {"degraded_mode", true}
+            });
+            METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "refresh_failed"}});
             return cached_api_key_;
         }
     }
@@ -87,8 +96,14 @@ bool SecretsService::isInitialized() const {
 }
 
 std::string SecretsService::fetchSecretFromAWS() {
+    auto timer = gara::Metrics::get()->start_timer("SecretsManagerDuration", {{"operation", "fetch"}});
+
     if (!sm_client_) {
-        std::cerr << "Error: Secrets Manager client not initialized" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Secrets Manager client not initialized", {
+            {"secret_name", secret_name_},
+            {"operation", "fetch"}
+        });
+        METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "client_not_initialized"}});
         return "";
     }
 
@@ -104,28 +119,48 @@ std::string SecretsService::fetchSecretFromAWS() {
             // Check if secret is stored as string (most common for API keys)
             const Aws::String& secret_string = result.GetSecretString();
             if (!secret_string.empty()) {
+                METRICS_COUNT("SecretsManagerOperations", 1.0, "Count", {{"operation", "fetch"}, {"status", "success"}});
                 return secret_string;
             }
 
             // Check if secret is binary
             const auto& secret_binary = result.GetSecretBinary();
             if (secret_binary.GetLength() > 0) {
-                std::cerr << "Error: Secret is stored as binary, expected string" << std::endl;
+                gara::Logger::log_structured(spdlog::level::err, "Secret is stored as binary, expected string", {
+                    {"secret_name", secret_name_},
+                    {"secret_type", "binary"},
+                    {"expected_type", "string"}
+                });
+                METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "binary_secret"}});
                 return "";
             }
 
             // No secret data found
-            std::cerr << "Error: Secret exists but contains no data" << std::endl;
+            gara::Logger::log_structured(spdlog::level::err, "Secret exists but contains no data", {
+                {"secret_name", secret_name_}
+            });
+            METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "empty_secret"}});
             return "";
         } else {
             const auto& error = outcome.GetError();
-            std::cerr << "Error fetching secret '" << secret_name_ << "': "
-                     << error.GetExceptionName() << " - "
-                     << error.GetMessage() << std::endl;
+            gara::Logger::log_structured(spdlog::level::err, "Failed to fetch secret from AWS Secrets Manager", {
+                {"secret_name", secret_name_},
+                {"error_code", error.GetExceptionName()},
+                {"error_message", error.GetMessage()},
+                {"operation", "GetSecretValue"}
+            });
+            METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "aws_error"}});
+            METRICS_COUNT("SecretsManagerOperations", 1.0, "Count", {{"operation", "fetch"}, {"status", "error"}});
             return "";
         }
     } catch (const std::exception& e) {
-        std::cerr << "Exception while fetching secret: " << e.what() << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Exception while fetching secret", {
+            {"secret_name", secret_name_},
+            {"error", e.what()},
+            {"operation", "fetch"}
+        });
+        METRICS_COUNT("SecretsManagerErrors", 1.0, "Count", {{"error_type", "exception"}});
+        METRICS_COUNT("SecretsManagerOperations", 1.0, "Count", {{"operation", "fetch"}, {"status", "error"}});
         return "";
     }
 }

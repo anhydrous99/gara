@@ -3,6 +3,8 @@
 #include "test_helpers/test_constants.h"
 #include "test_helpers/custom_matchers.h"
 #include <crow.h>
+#include "utils/logger.h"
+#include "utils/metrics.h"
 
 using namespace gara::middleware;
 using namespace gara::test_constants;
@@ -11,7 +13,9 @@ using namespace gara::test_matchers;
 class AuthMiddlewareTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Setup test fixtures if needed
+        // Initialize logger and metrics for tests (disabled to avoid noise)
+        gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
+        gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
     }
 
     // Helper to create a mock request with headers

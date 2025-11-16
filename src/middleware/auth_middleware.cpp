@@ -1,4 +1,6 @@
 #include "auth_middleware.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 
@@ -10,17 +12,38 @@ namespace middleware {
 bool AuthMiddleware::validateApiKey(const crow::request& req, const std::string& expected_key) {
     // If expected key is empty, authentication is not configured
     if (expected_key.empty()) {
+        LOG_WARN("Authentication attempted but API key not configured");
+        METRICS_COUNT("AuthAttempts", 1.0, "Count", {{"status", "unconfigured"}});
         return false;
     }
 
     std::string provided_key = extractApiKey(req);
 
     if (provided_key.empty()) {
+        gara::Logger::log_structured(spdlog::level::warn, "Authentication failed: missing API key", {
+            {"reason", "missing_key"},
+            {"endpoint", std::string(req.url)}
+        });
+        METRICS_COUNT("AuthAttempts", 1.0, "Count", {{"status", "missing_key"}});
         return false;
     }
 
     // Use constant-time comparison to prevent timing attacks
-    return constantTimeCompare(provided_key, expected_key);
+    bool valid = constantTimeCompare(provided_key, expected_key);
+
+    if (!valid) {
+        // Security: Log failed auth without revealing the actual key
+        gara::Logger::log_structured(spdlog::level::warn, "Authentication failed: invalid API key", {
+            {"reason", "invalid_key"},
+            {"endpoint", std::string(req.url)}
+        });
+        METRICS_COUNT("AuthAttempts", 1.0, "Count", {{"status", "invalid_key"}});
+    } else {
+        // Track successful authentication
+        METRICS_COUNT("AuthAttempts", 1.0, "Count", {{"status", "success"}});
+    }
+
+    return valid;
 }
 
 std::string AuthMiddleware::extractApiKey(const crow::request& req) {

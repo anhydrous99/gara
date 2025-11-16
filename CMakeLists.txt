@@ -74,6 +74,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(awssdk)
 
+# Fetch spdlog for structured logging
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.12.0
+)
+FetchContent_MakeAvailable(spdlog)
+
 # Fetch Google Test
 FetchContent_Declare(
     googletest
@@ -98,6 +106,8 @@ add_library(gara_lib
     src/models/album.cpp
     src/utils/file_utils.cpp
     src/utils/id_generator.cpp
+    src/utils/logger.cpp
+    src/utils/metrics.cpp
     src/services/s3_service.cpp
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
@@ -127,6 +137,7 @@ target_link_libraries(gara_lib
     ZLIB::ZLIB
     Crow::Crow
     nlohmann_json::nlohmann_json
+    spdlog::spdlog
     Threads::Threads
     aws-cpp-sdk-s3
     aws-cpp-sdk-secretsmanager

@@ -3,8 +3,9 @@
 #include "../models/image_metadata.h"
 #include "../constants/album_constants.h"
 #include "../exceptions/album_exceptions.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include <nlohmann/json.hpp>
-#include <iostream>
 
 using json = nlohmann::json;
 
@@ -19,91 +20,7 @@ AlbumController::AlbumController(
       secrets_service_(secrets_service) {
 }
 
-void AlbumController::registerRoutes(crow::SimpleApp& app) {
-    // Create album
-    CROW_ROUTE(app, "/api/albums").methods("POST"_method)
-    ([this](const crow::request& req) {
-        return handleCreateAlbum(req);
-    });
-
-    // List albums
-    CROW_ROUTE(app, "/api/albums").methods("GET"_method)
-    ([this](const crow::request& req) {
-        return handleListAlbums(req);
-    });
-
-    // Get single album
-    CROW_ROUTE(app, "/api/albums/<string>").methods("GET"_method)
-    ([this](const crow::request& req, const std::string& album_id) {
-        return handleGetAlbum(album_id, req);
-    });
-
-    // Update album
-    CROW_ROUTE(app, "/api/albums/<string>").methods("PUT"_method)
-    ([this](const crow::request& req, const std::string& album_id) {
-        return handleUpdateAlbum(album_id, req);
-    });
-
-    // Delete album
-    CROW_ROUTE(app, "/api/albums/<string>").methods("DELETE"_method)
-    ([this](const crow::request& req, const std::string& album_id) {
-        return handleDeleteAlbum(album_id, req);
-    });
-
-    // Add images to album
-    CROW_ROUTE(app, "/api/albums/<string>/images").methods("POST"_method)
-    ([this](const crow::request& req, const std::string& album_id) {
-        return handleAddImages(album_id, req);
-    });
-
-    // Remove image from album
-    CROW_ROUTE(app, "/api/albums/<string>/images/<string>").methods("DELETE"_method)
-    ([this](const crow::request& req, const std::string& album_id, const std::string& image_id) {
-        return handleRemoveImage(album_id, image_id, req);
-    });
-
-    // Reorder images in album
-    CROW_ROUTE(app, "/api/albums/<string>/reorder").methods("PUT"_method)
-    ([this](const crow::request& req, const std::string& album_id) {
-        return handleReorderImages(album_id, req);
-    });
-
-    // OPTIONS handlers for CORS preflight
-    CROW_ROUTE(app, "/api/albums").methods("OPTIONS"_method)
-    ([this](const crow::request&) {
-        crow::response resp(204);
-        addCorsHeaders(resp);
-        return resp;
-    });
-
-    CROW_ROUTE(app, "/api/albums/<string>").methods("OPTIONS"_method)
-    ([this](const crow::request&, const std::string&) {
-        crow::response resp(204);
-        addCorsHeaders(resp);
-        return resp;
-    });
-
-    CROW_ROUTE(app, "/api/albums/<string>/images").methods("OPTIONS"_method)
-    ([this](const crow::request&, const std::string&) {
-        crow::response resp(204);
-        addCorsHeaders(resp);
-        return resp;
-    });
-
-    CROW_ROUTE(app, "/api/albums/<string>/images/<string>").methods("OPTIONS"_method)
-    ([this](const crow::request&, const std::string&, const std::string&) {
-        crow::response resp(204);
-        addCorsHeaders(resp);
-        return resp;
-    });
-
-    CROW_ROUTE(app, "/api/albums/<string>/reorder").methods("OPTIONS"_method)
-    ([this](const crow::request&, const std::string&) {
-        crow::response resp(204);
-        addCorsHeaders(resp);
-        return resp;
-    });
-}
+// registerRoutes is now a template method in the header
 
 crow::response AlbumController::handleCreateAlbum(const crow::request& req) {
     return handleAuthenticatedJsonRequest<CreateAlbumRequest>(req, [this](const CreateAlbumRequest& request) {
@@ -275,14 +192,31 @@ crow::response AlbumController::handleAuthenticatedJsonRequest(const crow::reque
         auto request = RequestType::fromJson(body);
         return handler(request);
     } catch (const json::exception& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API JSON parse error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "json_parse"}});
         return buildErrorResponse(400, constants::ERROR_INVALID_JSON, e.what());
     } catch (const exceptions::NotFoundException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "not_found"}});
         return buildErrorResponse(404, "Not Found", e.what());
     } catch (const exceptions::ValidationException& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API validation error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "validation"}});
         return buildErrorResponse(400, constants::ERROR_VALIDATION, e.what());
     } catch (const exceptions::ConflictException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "conflict"}});
         return buildErrorResponse(409, "Conflict", e.what());
     } catch (const std::exception& e) {
+        gara::Logger::log_structured(spdlog::level::err, "Album API unexpected error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "unexpected"}});
         return buildErrorResponse(default_error_code,
             default_error_code == 400 ? "Bad Request" : "Internal Server Error",
             e.what());
@@ -294,10 +228,21 @@ crow::response AlbumController::handleJsonRequest(const crow::request& req, Hand
     try {
         return handler();
     } catch (const exceptions::NotFoundException& e) {
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "not_found"}});
         return buildErrorResponse(404, "Not Found", e.what());
     } catch (const exceptions::ValidationException& e) {
+        gara::Logger::log_structured(spdlog::level::warn, "Album API validation error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "validation"}});
         return buildErrorResponse(400, constants::ERROR_VALIDATION, e.what());
     } catch (const std::exception& e) {
+        gara::Logger::log_structured(spdlog::level::err, "Album API unexpected error", {
+            {"endpoint", std::string(req.url)},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("AlbumAPIErrors", 1.0, "Count", {{"error_type", "unexpected"}});
         return buildErrorResponse(default_error_code,
             default_error_code == 500 ? "Internal Server Error" : "Bad Request",
             e.what());

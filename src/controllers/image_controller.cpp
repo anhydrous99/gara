@@ -1,5 +1,7 @@
 #include "image_controller.h"
 #include "../utils/file_utils.h"
+#include "../utils/logger.h"
+#include "../utils/metrics.h"
 #include "../models/image_metadata.h"
 #include "../middleware/auth_middleware.h"
 #include <nlohmann/json.hpp>
@@ -21,25 +23,7 @@ ImageController::ImageController(std::shared_ptr<S3Service> s3_service,
       watermark_service_(watermark_service) {
 }
 
-void ImageController::registerRoutes(crow::SimpleApp& app) {
-    // Upload image
-    CROW_ROUTE(app, "/api/images/upload").methods("POST"_method)
-    ([this](const crow::request& req) {
-        return handleUpload(req);
-    });
-
-    // Get/transform image
-    CROW_ROUTE(app, "/api/images/<string>")
-    ([this](const crow::request& req, const std::string& image_id) {
-        return handleGetImage(req, image_id);
-    });
-
-    // Health check
-    CROW_ROUTE(app, "/api/images/health")
-    ([this](const crow::request& req) {
-        return handleHealthCheck(req);
-    });
-}
+// registerRoutes is now a template method in the header
 
 crow::response ImageController::handleUpload(const crow::request& req) {
     try {
@@ -121,7 +105,11 @@ crow::response ImageController::handleUpload(const crow::request& req) {
         return resp;
 
     } catch (const std::exception& e) {
-        std::cerr << "Upload error: " << e.what() << std::endl;  // Log to server
+        gara::Logger::log_structured(spdlog::level::err, "Image upload error", {
+            {"endpoint", "/api/images/upload"},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("APIRequests", 1.0, "Count", {{"endpoint", "/upload"}, {"status", "error"}});
         json error_response = {
             {"error", "Internal server error"},
             {"message", "An error occurred while processing your request"}  // Generic message to user
@@ -171,7 +159,12 @@ crow::response ImageController::handleGetImage(const crow::request& req,
         return resp;
 
     } catch (const std::exception& e) {
-        std::cerr << "Get image error: " << e.what() << std::endl;  // Log to server
+        gara::Logger::log_structured(spdlog::level::err, "Get image error", {
+            {"endpoint", "/api/images/:id"},
+            {"image_id", image_id},
+            {"error", e.what()}
+        });
+        METRICS_COUNT("APIRequests", 1.0, "Count", {{"endpoint", "/get"}, {"status", "error"}});
         json error_response = {
             {"error", "Internal server error"},
             {"message", "An error occurred while processing your request"}  // Generic message to user
@@ -280,43 +273,82 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
 
     // Check if already uploaded (deduplication)
     if (s3_service_->objectExists(s3_key)) {
-        std::cout << "Image already exists: " << image_id << std::endl;
+        gara::Logger::log_structured(spdlog::level::info, "Image already exists (deduplicated)", {
+            {"image_id", image_id},
+            {"s3_key", s3_key},
+            {"size_bytes", file_data.size()}
+        });
+        METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "deduplicated"}});
         return image_id;
     }
 
     // Create temporary file
     utils::TempFile temp_file("upload_");
     if (!temp_file.write(file_data)) {
-        std::cerr << "Failed to write temporary file" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to write temporary file for upload", {
+            {"image_id", image_id},
+            {"size_bytes", file_data.size()}
+        });
+        METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "temp_file_error"}});
         return "";
     }
 
     // Validate image
     if (!image_processor_->isValidImage(temp_file.getPath())) {
-        std::cerr << "Invalid image file" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Invalid image file uploaded", {
+            {"image_id", image_id},
+            {"filename", filename},
+            {"extension", extension}
+        });
+        METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "invalid_image"}});
         return "";
     }
 
     // Upload to S3
     std::string content_type = utils::FileUtils::getMimeType(extension);
     if (!s3_service_->uploadFile(temp_file.getPath(), s3_key, content_type)) {
-        std::cerr << "Failed to upload to S3" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to upload image to S3", {
+            {"image_id", image_id},
+            {"s3_key", s3_key},
+            {"content_type", content_type}
+        });
+        METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "s3_upload_error"}});
         return "";
     }
 
-    std::cout << "Uploaded image: " << image_id << " (" << s3_key << ")" << std::endl;
+    gara::Logger::log_structured(spdlog::level::info, "Image uploaded successfully", {
+        {"image_id", image_id},
+        {"s3_key", s3_key},
+        {"size_bytes", file_data.size()},
+        {"content_type", content_type}
+    });
+    METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "success"}});
     return image_id;
 }
 
 std::string ImageController::getOrCreateTransformed(const TransformRequest& request) {
+    // Start timing the operation
+    auto timer = gara::Metrics::get()->start_timer("ImageTransformDuration");
+
     // Check cache first
     std::string cached_key = cache_manager_->getCachedImage(request);
     if (!cached_key.empty()) {
-        std::cout << "Cache hit for: " << cached_key << std::endl;
+        gara::Logger::log_structured(spdlog::level::info, "Cache hit", {
+            {"cache_key", cached_key},
+            {"image_id", request.image_id},
+            {"operation", "transform"}
+        });
+        METRICS_COUNT("CacheHits", 1.0, "Count", {{"operation", "transform"}});
         return cached_key;
     }
 
-    std::cout << "Cache miss - creating transformation" << std::endl;
+    gara::Logger::log_structured(spdlog::level::info, "Cache miss - transforming image", {
+        {"image_id", request.image_id},
+        {"width", request.width},
+        {"height", request.height},
+        {"format", request.target_format}
+    });
+    METRICS_COUNT("CacheMisses", 1.0, "Count", {{"operation", "transform"}});
 
     // Download raw image
     std::string raw_key = "raw/" + request.image_id + ".*";
@@ -335,14 +367,22 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
     }
 
     if (found_raw_key.empty()) {
-        std::cerr << "Raw image not found: " << request.image_id << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Raw image not found in S3", {
+            {"image_id", request.image_id},
+            {"operation", "transform"}
+        });
+        METRICS_COUNT("TransformOperations", 1.0, "Count", {{"status", "raw_not_found"}});
         return "";
     }
 
     // Download raw image to temp file
     utils::TempFile raw_temp("raw_");
     if (!s3_service_->downloadFile(found_raw_key, raw_temp.getPath())) {
-        std::cerr << "Failed to download raw image" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to download raw image from S3", {
+            {"image_id", request.image_id},
+            {"s3_key", found_raw_key}
+        });
+        METRICS_COUNT("TransformOperations", 1.0, "Count", {{"status", "download_error"}});
         return "";
     }
 
@@ -359,7 +399,13 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
     );
 
     if (!success) {
-        std::cerr << "Image transformation failed" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Image transformation failed", {
+            {"image_id", request.image_id},
+            {"format", request.target_format},
+            {"width", request.width},
+            {"height", request.height}
+        });
+        METRICS_COUNT("TransformOperations", 1.0, "Count", {{"status", "transform_error"}});
         return "";
     }
 
@@ -377,17 +423,28 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
             // Save watermarked image back to temp file
             watermarked.write_to_file(transformed_temp.getPath().c_str());
 
-            std::cout << "Watermark applied successfully" << std::endl;
+            gara::Logger::log_structured(spdlog::level::info, "Watermark applied successfully", {
+                {"image_id", request.image_id},
+                {"format", request.target_format}
+            });
 
         } catch (const vips::VError& e) {
             // Log error but continue (graceful degradation)
-            std::cerr << "Watermark failed, using non-watermarked image: " << e.what() << std::endl;
+            gara::Logger::log_structured(spdlog::level::warn, "Watermark failed, using non-watermarked image", {
+                {"image_id", request.image_id},
+                {"error", e.what()},
+                {"graceful_degradation", true}
+            });
         }
     }
 
     // Store in cache (S3)
     if (!cache_manager_->storeInCache(request, transformed_temp.getPath())) {
-        std::cerr << "Failed to cache transformed image" << std::endl;
+        gara::Logger::log_structured(spdlog::level::err, "Failed to cache transformed image", {
+            {"image_id", request.image_id},
+            {"cache_key", request.getCacheKey()}
+        });
+        METRICS_COUNT("TransformOperations", 1.0, "Count", {{"status", "cache_error"}});
         return "";
     }
 
