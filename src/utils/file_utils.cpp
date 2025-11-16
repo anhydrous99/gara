@@ -1,4 +1,5 @@
 #include "file_utils.h"
+#include "logger.h"
 #include <openssl/evp.h>
 #include <fstream>
 #include <sstream>
@@ -105,7 +106,11 @@ std::string FileUtils::createTempFile(const std::string& prefix) {
     // Validate temp_dir length to prevent buffer overflow
     // Account for: "/" + prefix + "XXXXXX" + null terminator
     if (temp_dir.length() + prefix.length() + 10 > 255) {
-        std::cerr << "Temp directory path too long, using /tmp" << std::endl;
+        gara::Logger::log_structured(spdlog::level::warn, "Temp directory path too long, using /tmp fallback", {
+            {"requested_temp_dir", temp_dir},
+            {"prefix", prefix},
+            {"fallback", "/tmp"}
+        });
         temp_dir = "/tmp";
     }
 
@@ -116,7 +121,11 @@ std::string FileUtils::createTempFile(const std::string& prefix) {
     // Check if snprintf truncated the output
     if (written < 0 || written >= static_cast<int>(sizeof(temp_template))) {
         // Path too long, fall back to /tmp
-        std::cerr << "Path construction failed, using /tmp" << std::endl;
+        gara::Logger::log_structured(spdlog::level::warn, "Temp file path construction failed, using /tmp fallback", {
+            {"temp_dir", temp_dir},
+            {"prefix", prefix},
+            {"fallback", "/tmp"}
+        });
         snprintf(temp_template, sizeof(temp_template), "/tmp/%sXXXXXX", prefix.c_str());
     }
 
