@@ -3,7 +3,7 @@
 #include "services/cache_manager.h"
 #include "models/image_metadata.h"
 #include "utils/file_utils.h"
-#include "mocks/mock_s3_service.h"
+#include "mocks/fake_file_service.h"
 #include <vips/vips8>
 #include <vips/vips.h>
 #include <memory>
@@ -24,9 +24,9 @@ protected:
     }
 
     void SetUp() override {
-        fake_s3_ = std::make_shared<FakeS3Service>("test-bucket", "us-east-1");
+        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket");
         image_processor_ = std::make_shared<ImageProcessor>();
-        cache_manager_ = std::make_shared<CacheManager>(fake_s3_);
+        cache_manager_ = std::make_shared<CacheManager>(fake_file_service_);
 
         // Create test image
         test_image_path_ = "/tmp/gara_integration_test.ppm";
@@ -34,7 +34,7 @@ protected:
     }
 
     void TearDown() override {
-        fake_s3_->clear();
+        fake_file_service_->clear();
         FileUtils::deleteFile(test_image_path_);
     }
 
@@ -69,7 +69,7 @@ protected:
         }
     }
 
-    std::shared_ptr<FakeS3Service> fake_s3_;
+    std::shared_ptr<FakeFileService> fake_file_service_;
     std::shared_ptr<ImageProcessor> image_processor_;
     std::shared_ptr<CacheManager> cache_manager_;
     std::string test_image_path_;
@@ -82,9 +82,9 @@ TEST_F(IntegrationTest, UploadTransformCacheRetrieve) {
     EXPECT_FALSE(image_hash.empty());
 
     std::string raw_key = ImageMetadata::generateRawKey(image_hash, "ppm");
-    bool upload_success = fake_s3_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
+    bool upload_success = fake_file_service_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
     EXPECT_TRUE(upload_success);
-    EXPECT_TRUE(fake_s3_->objectExists(raw_key));
+    EXPECT_TRUE(fake_file_service_->objectExists(raw_key));
 
     // Step 2: Transform image
     TransformRequest transform_req(image_hash, "jpeg", 100, 50);
@@ -94,7 +94,7 @@ TEST_F(IntegrationTest, UploadTransformCacheRetrieve) {
 
     // Download raw image
     TempFile raw_download("raw_dl_");
-    bool download_success = fake_s3_->downloadFile(raw_key, raw_download.getPath());
+    bool download_success = fake_file_service_->downloadFile(raw_key, raw_download.getPath());
     EXPECT_TRUE(download_success);
 
     // Transform
@@ -137,7 +137,7 @@ TEST_F(IntegrationTest, MultipleTransformations) {
     std::string raw_key = ImageMetadata::generateRawKey(image_hash, "ppm");
 
     // Upload raw image
-    fake_s3_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
+    fake_file_service_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
 
     // Define multiple transformations
     std::vector<TransformRequest> transformations = {
@@ -151,7 +151,7 @@ TEST_F(IntegrationTest, MultipleTransformations) {
     for (const auto& req : transformations) {
         // Download raw
         TempFile raw_dl("raw_");
-        fake_s3_->downloadFile(raw_key, raw_dl.getPath());
+        fake_file_service_->downloadFile(raw_key, raw_dl.getPath());
 
         // Transform
         TempFile transformed("trans_");
@@ -179,7 +179,7 @@ TEST_F(IntegrationTest, MultipleTransformations) {
     }
 
     // Should have 1 raw + 4 transformed = 5 objects
-    EXPECT_EQ(5, fake_s3_->getObjectCount());
+    EXPECT_EQ(5, fake_file_service_->getObjectCount());
 }
 
 // Test deduplication (same image uploaded twice)
@@ -187,7 +187,7 @@ TEST_F(IntegrationTest, Deduplication) {
     // Upload image first time
     std::string hash1 = FileUtils::calculateSHA256(test_image_path_);
     std::string raw_key1 = ImageMetadata::generateRawKey(hash1, "ppm");
-    fake_s3_->uploadFile(test_image_path_, raw_key1, "image/x-portable-pixmap");
+    fake_file_service_->uploadFile(test_image_path_, raw_key1, "image/x-portable-pixmap");
 
     // Simulate uploading same image again
     std::string hash2 = FileUtils::calculateSHA256(test_image_path_);
@@ -197,11 +197,11 @@ TEST_F(IntegrationTest, Deduplication) {
     EXPECT_EQ(raw_key1, raw_key2);  // Same S3 key
 
     // Check if already exists (deduplication check)
-    bool already_exists = fake_s3_->objectExists(raw_key2);
+    bool already_exists = fake_file_service_->objectExists(raw_key2);
     EXPECT_TRUE(already_exists);
 
     // Should still have only 1 object
-    EXPECT_EQ(1, fake_s3_->getObjectCount());
+    EXPECT_EQ(1, fake_file_service_->getObjectCount());
 }
 
 // Test cache hit performance (no re-transformation)
@@ -209,7 +209,7 @@ TEST_F(IntegrationTest, CacheHitPerformance) {
     std::string image_hash = FileUtils::calculateSHA256(test_image_path_);
     std::string raw_key = ImageMetadata::generateRawKey(image_hash, "ppm");
 
-    fake_s3_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
+    fake_file_service_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
 
     TransformRequest req(image_hash, "jpeg", 100, 50);
 
@@ -217,7 +217,7 @@ TEST_F(IntegrationTest, CacheHitPerformance) {
     EXPECT_FALSE(cache_manager_->existsInCache(req));
 
     TempFile raw_dl("raw_");
-    fake_s3_->downloadFile(raw_key, raw_dl.getPath());
+    fake_file_service_->downloadFile(raw_key, raw_dl.getPath());
 
     TempFile transformed("trans_");
     std::string transformed_path = transformed.getPath() + ".jpg";
@@ -263,13 +263,13 @@ TEST_F(IntegrationTest, AspectRatioPreservation) {
     std::string image_hash = FileUtils::calculateSHA256(test_image_path_);
     std::string raw_key = ImageMetadata::generateRawKey(image_hash, "ppm");
 
-    fake_s3_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
+    fake_file_service_->uploadFile(test_image_path_, raw_key, "image/x-portable-pixmap");
 
     // Request resize with only width (should preserve 2:1 aspect ratio)
     TransformRequest req(image_hash, "jpeg", 100, 0);
 
     TempFile raw_dl("raw_");
-    fake_s3_->downloadFile(raw_key, raw_dl.getPath());
+    fake_file_service_->downloadFile(raw_key, raw_dl.getPath());
 
     TempFile transformed("trans_");
     std::string transformed_path = transformed.getPath() + ".jpg";
