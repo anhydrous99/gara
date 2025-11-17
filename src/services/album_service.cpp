@@ -223,7 +223,7 @@ bool AlbumService::deleteAlbum(const std::string& album_id) {
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "delete"}, {"status", "not_found"}});
-        throw exceptions::NotFoundException("Album not found: " + album_id);
+        return false;  // Return false instead of throwing exception
     }
 
     // Delete from database
@@ -252,6 +252,17 @@ Album AlbumService::addImages(const std::string& album_id, const AddImagesReques
     auto timer = gara::Metrics::get()->start_timer("AlbumOperationDuration",
                                                    {{"operation", "add_images"}});
 
+    // Validate image IDs list is not empty
+    if (request.image_ids.empty()) {
+        gara::Logger::log_structured(spdlog::level::warn, "Add images failed: empty image list", {
+            {"operation", "addImages"},
+            {"album_id", album_id}
+        });
+        METRICS_COUNT("AlbumOperations", 1.0, "Count",
+                     {{"operation", "add_images"}, {"status", "validation_error"}});
+        throw std::runtime_error("Image IDs list cannot be empty");
+    }
+
     // Get existing album
     auto album_opt = db_client_->getAlbum(album_id);
     if (!album_opt) {
@@ -266,7 +277,7 @@ Album AlbumService::addImages(const std::string& album_id, const AddImagesReques
 
     Album album = *album_opt;
 
-    // Validate all new image IDs exist
+    // Validate all new image IDs exist and are not duplicates
     for (const auto& image_id : request.image_ids) {
         if (!validateImageExists(image_id)) {
             gara::Logger::log_structured(spdlog::level::warn, "Add images failed: image not found", {
@@ -277,6 +288,18 @@ Album AlbumService::addImages(const std::string& album_id, const AddImagesReques
             METRICS_COUNT("AlbumOperations", 1.0, "Count",
                          {{"operation", "add_images"}, {"status", "validation_error"}});
             throw exceptions::ValidationException("Image not found: " + image_id);
+        }
+
+        // Check for duplicates in the album
+        if (std::find(album.image_ids.begin(), album.image_ids.end(), image_id) != album.image_ids.end()) {
+            gara::Logger::log_structured(spdlog::level::warn, "Add images failed: duplicate image", {
+                {"operation", "addImages"},
+                {"album_id", album_id},
+                {"image_id", image_id}
+            });
+            METRICS_COUNT("AlbumOperations", 1.0, "Count",
+                         {{"operation", "add_images"}, {"status", "validation_error"}});
+            throw exceptions::ValidationException("Image already exists in album: " + image_id);
         }
     }
 
@@ -346,8 +369,8 @@ Album AlbumService::removeImage(const std::string& album_id, const std::string& 
             {"image_id", image_id}
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
-                     {{"operation", "remove_image"}, {"status", "not_found"}});
-        throw exceptions::NotFoundException("Image not found in album: " + image_id);
+                     {{"operation", "remove_image"}, {"status", "validation_error"}});
+        throw exceptions::ValidationException("Image not found in album: " + image_id);
     }
 
     album.image_ids.erase(it);

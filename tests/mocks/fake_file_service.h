@@ -89,7 +89,7 @@ public:
         if (storage_.find(key) == storage_.end()) {
             return "";
         }
-        return "https://fake-storage.test/" + bucket_name_ + "/" + key +
+        return "https://fake-s3.amazonaws.com/" + bucket_name_ + "/" + key +
                "?expires=" + std::to_string(expiration_seconds);
     }
 
