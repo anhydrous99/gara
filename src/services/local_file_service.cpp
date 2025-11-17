@@ -12,9 +12,9 @@ LocalFileService::LocalFileService(const std::string& storage_path)
     // Create storage directory if it doesn't exist
     try {
         std::filesystem::create_directories(storage_path);
-        Logger::info("Local file storage initialized at: " + storage_path);
+        LOG_INFO("Local file storage initialized at: {}", storage_path);
     } catch (const std::filesystem::filesystem_error& e) {
-        Logger::error("Failed to create storage directory: " + std::string(e.what()));
+        LOG_ERROR("Failed to create storage directory: {}", e.what());
         throw std::runtime_error("Failed to initialize local file storage");
     }
 }
@@ -31,7 +31,7 @@ bool LocalFileService::ensureDirectoryExists(const std::filesystem::path& file_p
         }
         return true;
     } catch (const std::filesystem::filesystem_error& e) {
-        Logger::error("Failed to create directory: " + std::string(e.what()));
+        LOG_ERROR("Failed to create directory: {}", e.what());
         return false;
     }
 }
@@ -48,11 +48,11 @@ bool LocalFileService::uploadFile(const std::string& local_path, const std::stri
         std::filesystem::copy_file(local_path, dest_path,
                                   std::filesystem::copy_options::overwrite_existing);
 
-        Logger::debug("File uploaded: " + local_path + " -> " + dest_path.string());
+        LOG_DEBUG("File uploaded: {} -> {}", local_path, dest_path.string());
         return true;
 
     } catch (const std::filesystem::filesystem_error& e) {
-        Logger::error("Failed to upload file: " + std::string(e.what()));
+        LOG_ERROR("Failed to upload file: {}", e.what());
         return false;
     }
 }
@@ -68,18 +68,18 @@ bool LocalFileService::uploadData(const std::vector<char>& data, const std::stri
 
         std::ofstream file(dest_path, std::ios::binary);
         if (!file) {
-            Logger::error("Failed to open file for writing: " + dest_path.string());
+            LOG_ERROR("Failed to open file for writing: {}", dest_path.string());
             return false;
         }
 
         file.write(data.data(), data.size());
         file.close();
 
-        Logger::debug("Data uploaded: " + dest_path.string() + " (" + std::to_string(data.size()) + " bytes)");
+        LOG_DEBUG("Data uploaded: {} ({} bytes)", dest_path.string(), data.size());
         return true;
 
     } catch (const std::exception& e) {
-        Logger::error("Failed to upload data: " + std::string(e.what()));
+        LOG_ERROR("Failed to upload data: {}", e.what());
         return false;
     }
 }
@@ -89,7 +89,7 @@ bool LocalFileService::downloadFile(const std::string& key, const std::string& l
         auto src_path = getFilePath(key);
 
         if (!std::filesystem::exists(src_path)) {
-            Logger::error("File not found: " + src_path.string());
+            LOG_ERROR("File not found: {}", src_path.string());
             return false;
         }
 
@@ -102,11 +102,11 @@ bool LocalFileService::downloadFile(const std::string& key, const std::string& l
         std::filesystem::copy_file(src_path, local_path,
                                   std::filesystem::copy_options::overwrite_existing);
 
-        Logger::debug("File downloaded: " + src_path.string() + " -> " + local_path);
+        LOG_DEBUG("File downloaded: {} -> {}", src_path.string(), local_path);
         return true;
 
     } catch (const std::filesystem::filesystem_error& e) {
-        Logger::error("Failed to download file: " + std::string(e.what()));
+        LOG_ERROR("Failed to download file: {}", e.what());
         return false;
     }
 }
@@ -116,13 +116,13 @@ std::vector<char> LocalFileService::downloadData(const std::string& key) {
         auto src_path = getFilePath(key);
 
         if (!std::filesystem::exists(src_path)) {
-            Logger::error("File not found: " + src_path.string());
+            LOG_ERROR("File not found: {}", src_path.string());
             return {};
         }
 
         std::ifstream file(src_path, std::ios::binary | std::ios::ate);
         if (!file) {
-            Logger::error("Failed to open file for reading: " + src_path.string());
+            LOG_ERROR("Failed to open file for reading: {}", src_path.string());
             return {};
         }
 
@@ -131,15 +131,15 @@ std::vector<char> LocalFileService::downloadData(const std::string& key) {
 
         std::vector<char> buffer(size);
         if (!file.read(buffer.data(), size)) {
-            Logger::error("Failed to read file: " + src_path.string());
+            LOG_ERROR("Failed to read file: {}", src_path.string());
             return {};
         }
 
-        Logger::debug("Data downloaded: " + src_path.string() + " (" + std::to_string(size) + " bytes)");
+        LOG_DEBUG("Data downloaded: {} ({} bytes)", src_path.string(), size);
         return buffer;
 
     } catch (const std::exception& e) {
-        Logger::error("Failed to download data: " + std::string(e.what()));
+        LOG_ERROR("Failed to download data: {}", e.what());
         return {};
     }
 }
@@ -154,16 +154,16 @@ bool LocalFileService::deleteObject(const std::string& key) {
         auto file_path = getFilePath(key);
 
         if (!std::filesystem::exists(file_path)) {
-            Logger::warn("File not found for deletion: " + file_path.string());
+            LOG_WARN("File not found for deletion: {}", file_path.string());
             return false;
         }
 
         std::filesystem::remove(file_path);
-        Logger::debug("File deleted: " + file_path.string());
+        LOG_DEBUG("File deleted: {}", file_path.string());
         return true;
 
     } catch (const std::filesystem::filesystem_error& e) {
-        Logger::error("Failed to delete file: " + std::string(e.what()));
+        LOG_ERROR("Failed to delete file: {}", e.what());
         return false;
     }
 }
@@ -174,7 +174,7 @@ std::string LocalFileService::generatePresignedUrl(const std::string& key, int e
     auto file_path = getFilePath(key);
 
     if (!std::filesystem::exists(file_path)) {
-        Logger::warn("Generating URL for non-existent file: " + file_path.string());
+        LOG_WARN("Generating URL for non-existent file: {}", file_path.string());
     }
 
     // Return as file:// URL for now

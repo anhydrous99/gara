@@ -14,7 +14,7 @@ SQLiteClient::SQLiteClient(const std::string& db_path)
 
     int rc = sqlite3_open(db_path.c_str(), &db_);
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to open SQLite database: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to open SQLite database: {}", sqlite3_errmsg(db_));
         throw std::runtime_error("Failed to open database: " + db_path);
     }
 
@@ -23,13 +23,13 @@ SQLiteClient::SQLiteClient(const std::string& db_path)
     executeSql("PRAGMA synchronous=NORMAL");
     executeSql("PRAGMA foreign_keys=ON");
 
-    Logger::info("SQLite database opened: " + db_path);
+    LOG_INFO("SQLite database opened: {}", db_path);
 }
 
 SQLiteClient::~SQLiteClient() {
     if (db_) {
         sqlite3_close(db_);
-        Logger::info("SQLite database closed");
+        LOG_INFO("SQLite database closed");
     }
 }
 
@@ -39,7 +39,7 @@ bool SQLiteClient::initialize() {
     // Read schema file
     std::ifstream schema_file("src/db/schema.sql");
     if (!schema_file.is_open()) {
-        Logger::error("Failed to open schema.sql file");
+        LOG_ERROR("Failed to open schema.sql file");
         return false;
     }
 
@@ -53,12 +53,12 @@ bool SQLiteClient::initialize() {
 
     if (rc != SQLITE_OK) {
         std::string error = error_msg ? error_msg : "Unknown error";
-        Logger::error("Failed to initialize database schema: " + error);
+        LOG_ERROR("Failed to initialize database schema: {}", error);
         sqlite3_free(error_msg);
         return false;
     }
 
-    Logger::info("Database schema initialized successfully");
+    LOG_INFO("Database schema initialized successfully");
     return true;
 }
 
@@ -68,7 +68,7 @@ bool SQLiteClient::executeSql(const std::string& sql) {
 
     if (rc != SQLITE_OK) {
         std::string error = error_msg ? error_msg : "Unknown error";
-        Logger::error("SQL execution failed: " + error);
+        LOG_ERROR("SQL execution failed: {}", error);
         sqlite3_free(error_msg);
         return false;
     }
@@ -88,7 +88,7 @@ std::vector<std::string> SQLiteClient::jsonToVector(const std::string& json_str)
         json j = json::parse(json_str);
         return j.get<std::vector<std::string>>();
     } catch (const json::exception& e) {
-        Logger::error("Failed to parse JSON: " + std::string(e.what()));
+        LOG_ERROR("Failed to parse JSON: {}", e.what());
         return {};
     }
 }
@@ -139,7 +139,7 @@ bool SQLiteClient::putAlbum(const Album& album) {
     int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to prepare statement: {}", sqlite3_errmsg(db_));
         return false;
     }
 
@@ -163,11 +163,11 @@ bool SQLiteClient::putAlbum(const Album& album) {
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) {
-        Logger::error("Failed to execute putAlbum: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to execute putAlbum: {}", sqlite3_errmsg(db_));
         return false;
     }
 
-    Logger::debug("Album stored successfully: " + album.album_id);
+    LOG_DEBUG("Album stored successfully: {}", album.album_id);
     return true;
 }
 
@@ -185,7 +185,7 @@ std::optional<Album> SQLiteClient::getAlbum(const std::string& album_id) {
     int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to prepare statement: {}", sqlite3_errmsg(db_));
         return std::nullopt;
     }
 
@@ -202,7 +202,7 @@ std::optional<Album> SQLiteClient::getAlbum(const std::string& album_id) {
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) {
-        Logger::error("Failed to execute getAlbum: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to execute getAlbum: {}", sqlite3_errmsg(db_));
     }
 
     return std::nullopt;
@@ -227,7 +227,7 @@ std::vector<Album> SQLiteClient::listAlbums(bool published_only) {
     int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to prepare statement: {}", sqlite3_errmsg(db_));
         return {};
     }
 
@@ -240,11 +240,11 @@ std::vector<Album> SQLiteClient::listAlbums(bool published_only) {
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) {
-        Logger::error("Failed to execute listAlbums: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to execute listAlbums: {}", sqlite3_errmsg(db_));
         return {};
     }
 
-    Logger::debug("Listed " + std::to_string(albums.size()) + " albums");
+    LOG_DEBUG("Listed {} albums", albums.size());
     return albums;
 }
 
@@ -257,7 +257,7 @@ bool SQLiteClient::deleteAlbum(const std::string& album_id) {
     int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to prepare statement: {}", sqlite3_errmsg(db_));
         return false;
     }
 
@@ -267,12 +267,12 @@ bool SQLiteClient::deleteAlbum(const std::string& album_id) {
     sqlite3_finalize(stmt);
 
     if (rc != SQLITE_DONE) {
-        Logger::error("Failed to execute deleteAlbum: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to execute deleteAlbum: {}", sqlite3_errmsg(db_));
         return false;
     }
 
     int changes = sqlite3_changes(db_);
-    Logger::debug("Album deleted: " + album_id + " (rows affected: " + std::to_string(changes) + ")");
+    LOG_DEBUG("Album deleted: {} (rows affected: {})", album_id, changes);
 
     return changes > 0;
 }
@@ -291,7 +291,7 @@ bool SQLiteClient::albumNameExists(const std::string& name,
     int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
 
     if (rc != SQLITE_OK) {
-        Logger::error("Failed to prepare statement: " + std::string(sqlite3_errmsg(db_)));
+        LOG_ERROR("Failed to prepare statement: {}", sqlite3_errmsg(db_));
         return false;
     }
 
