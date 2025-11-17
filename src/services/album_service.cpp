@@ -42,7 +42,7 @@ Album AlbumService::createAlbum(const CreateAlbumRequest& request) {
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "create"}, {"status", "validation_error"}});
-        throw ValidationException("Album name cannot be empty");
+        throw exceptions::ValidationException("Album name cannot be empty");
     }
 
     // Check if name already exists
@@ -53,7 +53,7 @@ Album AlbumService::createAlbum(const CreateAlbumRequest& request) {
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "create"}, {"status", "conflict"}});
-        throw ConflictException("Album with name '" + request.name + "' already exists");
+        throw exceptions::ConflictException("Album with name '" + request.name + "' already exists");
     }
 
     // Create album
@@ -61,36 +61,12 @@ Album AlbumService::createAlbum(const CreateAlbumRequest& request) {
     album.album_id = gara::IdGenerator::generateUUID();
     album.name = request.name;
     album.description = request.description;
-    album.cover_image_id = request.cover_image_id;
-    album.image_ids = request.image_ids;
+    album.cover_image_id = "";  // Not provided in CreateAlbumRequest
+    album.image_ids = {};  // Not provided in CreateAlbumRequest
     album.tags = request.tags;
     album.published = request.published;
     album.created_at = std::time(nullptr);
     album.updated_at = album.created_at;
-
-    // Validate cover image if provided
-    if (!album.cover_image_id.empty() && !validateImageExists(album.cover_image_id)) {
-        gara::Logger::log_structured(spdlog::level::warn, "Album creation failed: cover image not found", {
-            {"operation", "createAlbum"},
-            {"cover_image_id", album.cover_image_id}
-        });
-        METRICS_COUNT("AlbumOperations", 1.0, "Count",
-                     {{"operation", "create"}, {"status", "validation_error"}});
-        throw ValidationException("Cover image not found: " + album.cover_image_id);
-    }
-
-    // Validate all image IDs
-    for (const auto& image_id : album.image_ids) {
-        if (!validateImageExists(image_id)) {
-            gara::Logger::log_structured(spdlog::level::warn, "Album creation failed: image not found", {
-                {"operation", "createAlbum"},
-                {"image_id", image_id}
-            });
-            METRICS_COUNT("AlbumOperations", 1.0, "Count",
-                         {{"operation", "create"}, {"status", "validation_error"}});
-            throw ValidationException("Image not found: " + image_id);
-        }
-    }
 
     // Store in database
     if (!db_client_->putAlbum(album)) {
@@ -127,7 +103,7 @@ Album AlbumService::getAlbum(const std::string& album_id) {
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "get"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     METRICS_COUNT("AlbumOperations", 1.0, "Count",
@@ -166,56 +142,50 @@ Album AlbumService::updateAlbum(const std::string& album_id, const UpdateAlbumRe
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "update"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     Album album = *album_opt;
 
-    // Update fields if provided
-    if (request.name.has_value()) {
-        const std::string& new_name = *request.name;
-        if (new_name.empty()) {
-            throw ValidationException("Album name cannot be empty");
-        }
-        if (new_name != album.name && db_client_->albumNameExists(new_name, album_id)) {
+    // Update fields if provided (non-empty means provided in UpdateAlbumRequest)
+    if (!request.name.empty()) {
+        if (request.name != album.name && db_client_->albumNameExists(request.name, album_id)) {
             gara::Logger::log_structured(spdlog::level::warn, "Album update failed: duplicate name", {
                 {"operation", "updateAlbum"},
                 {"album_id", album_id},
-                {"name", new_name}
+                {"name", request.name}
             });
             METRICS_COUNT("AlbumOperations", 1.0, "Count",
                          {{"operation", "update"}, {"status", "conflict"}});
-            throw ConflictException("Album with name '" + new_name + "' already exists");
+            throw exceptions::ConflictException("Album with name '" + request.name + "' already exists");
         }
-        album.name = new_name;
+        album.name = request.name;
     }
 
-    if (request.description.has_value()) {
-        album.description = *request.description;
+    if (!request.description.empty()) {
+        album.description = request.description;
     }
 
-    if (request.cover_image_id.has_value()) {
-        const std::string& cover_id = *request.cover_image_id;
-        if (!cover_id.empty() && !validateImageExists(cover_id)) {
+    if (!request.cover_image_id.empty()) {
+        if (!validateImageExists(request.cover_image_id)) {
             gara::Logger::log_structured(spdlog::level::warn, "Album update failed: cover image not found", {
                 {"operation", "updateAlbum"},
                 {"album_id", album_id},
-                {"cover_image_id", cover_id}
+                {"cover_image_id", request.cover_image_id}
             });
             METRICS_COUNT("AlbumOperations", 1.0, "Count",
                          {{"operation", "update"}, {"status", "validation_error"}});
-            throw ValidationException("Cover image not found: " + cover_id);
+            throw exceptions::ValidationException("Cover image not found: " + request.cover_image_id);
         }
-        album.cover_image_id = cover_id;
+        album.cover_image_id = request.cover_image_id;
     }
 
-    if (request.tags.has_value()) {
-        album.tags = *request.tags;
+    if (!request.tags.empty()) {
+        album.tags = request.tags;
     }
 
-    if (request.published.has_value()) {
-        album.published = *request.published;
-    }
+    // Note: published is a bool, so we always update it from the request
+    album.published = request.published;
 
     album.updated_at = std::time(nullptr);
 
@@ -253,7 +223,7 @@ bool AlbumService::deleteAlbum(const std::string& album_id) {
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "delete"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     // Delete from database
@@ -291,7 +261,7 @@ Album AlbumService::addImages(const std::string& album_id, const AddImagesReques
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "add_images"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     Album album = *album_opt;
@@ -306,15 +276,14 @@ Album AlbumService::addImages(const std::string& album_id, const AddImagesReques
             });
             METRICS_COUNT("AlbumOperations", 1.0, "Count",
                          {{"operation", "add_images"}, {"status", "validation_error"}});
-            throw ValidationException("Image not found: " + image_id);
+            throw exceptions::ValidationException("Image not found: " + image_id);
         }
     }
 
-    // Add images at specified position or append
-    if (request.position.has_value() && *request.position >= 0 &&
-        *request.position <= static_cast<int>(album.image_ids.size())) {
+    // Add images at specified position or append (position=-1 means append)
+    if (request.position >= 0 && request.position <= static_cast<int>(album.image_ids.size())) {
         album.image_ids.insert(
-            album.image_ids.begin() + *request.position,
+            album.image_ids.begin() + request.position,
             request.image_ids.begin(),
             request.image_ids.end()
         );
@@ -363,7 +332,7 @@ Album AlbumService::removeImage(const std::string& album_id, const std::string& 
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "remove_image"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     Album album = *album_opt;
@@ -378,7 +347,7 @@ Album AlbumService::removeImage(const std::string& album_id, const std::string& 
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "remove_image"}, {"status", "not_found"}});
-        throw NotFoundException("Image not found in album: " + image_id);
+        throw exceptions::NotFoundException("Image not found in album: " + image_id);
     }
 
     album.image_ids.erase(it);
@@ -420,26 +389,26 @@ Album AlbumService::reorderImages(const std::string& album_id, const ReorderImag
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "reorder_images"}, {"status", "not_found"}});
-        throw NotFoundException("Album not found: " + album_id);
+        throw exceptions::NotFoundException("Album not found: " + album_id);
     }
 
     Album album = *album_opt;
 
     // Validate new order has same images
-    if (request.new_order.size() != album.image_ids.size()) {
+    if (request.image_ids.size() != album.image_ids.size()) {
         gara::Logger::log_structured(spdlog::level::warn, "Reorder images failed: size mismatch", {
             {"operation", "reorderImages"},
             {"album_id", album_id},
             {"expected", std::to_string(album.image_ids.size())},
-            {"provided", std::to_string(request.new_order.size())}
+            {"provided", std::to_string(request.image_ids.size())}
         });
         METRICS_COUNT("AlbumOperations", 1.0, "Count",
                      {{"operation", "reorder_images"}, {"status", "validation_error"}});
-        throw ValidationException("New order must contain all existing images");
+        throw exceptions::ValidationException("New order must contain all existing images");
     }
 
     // Validate all images are present
-    for (const auto& image_id : request.new_order) {
+    for (const auto& image_id : request.image_ids) {
         if (std::find(album.image_ids.begin(), album.image_ids.end(), image_id) == album.image_ids.end()) {
             gara::Logger::log_structured(spdlog::level::warn, "Reorder images failed: unknown image", {
                 {"operation", "reorderImages"},
@@ -448,11 +417,11 @@ Album AlbumService::reorderImages(const std::string& album_id, const ReorderImag
             });
             METRICS_COUNT("AlbumOperations", 1.0, "Count",
                          {{"operation", "reorder_images"}, {"status", "validation_error"}});
-            throw ValidationException("Image not in album: " + image_id);
+            throw exceptions::ValidationException("Image not in album: " + image_id);
         }
     }
 
-    album.image_ids = request.new_order;
+    album.image_ids = request.image_ids;
     album.updated_at = std::time(nullptr);
 
     // Save updated album
