@@ -78,10 +78,87 @@ public:
         return false;
     }
 
+    // Image metadata operations
+    bool putImageMetadata(const ImageMetadata& metadata) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        images_[metadata.image_id] = metadata;
+        return true;
+    }
+
+    std::optional<ImageMetadata> getImageMetadata(const std::string& image_id) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        auto it = images_.find(image_id);
+        if (it != images_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    std::vector<ImageMetadata> listImages(int limit, int offset, ImageSortOrder sort_order) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Convert map to vector
+        std::vector<ImageMetadata> all_images;
+        for (const auto& [id, img] : images_) {
+            all_images.push_back(img);
+        }
+
+        // Sort based on sort_order
+        switch (sort_order) {
+            case ImageSortOrder::NEWEST:
+                std::sort(all_images.begin(), all_images.end(),
+                         [](const ImageMetadata& a, const ImageMetadata& b) {
+                             return a.upload_timestamp > b.upload_timestamp;
+                         });
+                break;
+            case ImageSortOrder::OLDEST:
+                std::sort(all_images.begin(), all_images.end(),
+                         [](const ImageMetadata& a, const ImageMetadata& b) {
+                             return a.upload_timestamp < b.upload_timestamp;
+                         });
+                break;
+            case ImageSortOrder::NAME_ASC:
+                std::sort(all_images.begin(), all_images.end(),
+                         [](const ImageMetadata& a, const ImageMetadata& b) {
+                             return a.name < b.name;
+                         });
+                break;
+            case ImageSortOrder::NAME_DESC:
+                std::sort(all_images.begin(), all_images.end(),
+                         [](const ImageMetadata& a, const ImageMetadata& b) {
+                             return a.name > b.name;
+                         });
+                break;
+        }
+
+        // Apply pagination
+        std::vector<ImageMetadata> result;
+        size_t start = std::min(static_cast<size_t>(offset), all_images.size());
+        size_t end = std::min(start + static_cast<size_t>(limit), all_images.size());
+
+        for (size_t i = start; i < end; ++i) {
+            result.push_back(all_images[i]);
+        }
+
+        return result;
+    }
+
+    int getImageCount() override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return static_cast<int>(images_.size());
+    }
+
+    bool imageExists(const std::string& image_id) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return images_.find(image_id) != images_.end();
+    }
+
     // Test helper methods
     void clear() {
         std::lock_guard<std::mutex> lock(mutex_);
         albums_.clear();
+        images_.clear();
     }
 
     size_t getAlbumCount() const {
@@ -89,9 +166,15 @@ public:
         return albums_.size();
     }
 
+    size_t getImageMetadataCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return images_.size();
+    }
+
 private:
     mutable std::mutex mutex_;
     std::map<std::string, Album> albums_;
+    std::map<std::string, ImageMetadata> images_;
 };
 
 } // namespace testing
