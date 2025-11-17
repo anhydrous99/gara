@@ -16,10 +16,10 @@ ImageController::ImageController(std::shared_ptr<FileServiceInterface> file_serv
                                 std::shared_ptr<CacheManager> cache_manager,
                                 std::shared_ptr<ConfigServiceInterface> config_service,
                                 std::shared_ptr<WatermarkService> watermark_service)
-    : file_service_(s3_service),
+    : file_service_(file_service),
       image_processor_(image_processor),
       cache_manager_(cache_manager),
-      config_service_(secrets_service),
+      config_service_(config_service),
       watermark_service_(watermark_service) {
 }
 

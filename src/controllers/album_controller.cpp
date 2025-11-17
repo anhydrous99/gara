@@ -16,8 +16,8 @@ AlbumController::AlbumController(
     std::shared_ptr<FileServiceInterface> file_service,
     std::shared_ptr<ConfigServiceInterface> config_service)
     : album_service_(album_service),
-      file_service_(s3_service),
-      config_service_(secrets_service) {
+      file_service_(file_service),
+      config_service_(config_service) {
 }
 
 // registerRoutes is now a template method in the header
