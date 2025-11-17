@@ -4,15 +4,15 @@
 #include "services/cache_manager.h"
 #include "utils/file_utils.h"
 #include "models/album.h"
-#include "mocks/mock_s3_service.h"
-#include "mocks/fake_dynamodb_client.h"
+#include "mocks/fake_file_service.h"
+#include "mocks/fake_database_client.h"
 #include "exceptions/album_exceptions.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 
 using namespace gara;
 using namespace gara::utils;
-using namespace gara::testing;  // Needed for FakeS3Service
+using namespace gara::testing;  // Needed for FakeFileService
 using namespace gara::exceptions;
 
 class ErrorHandlingTest : public ::testing::Test {
@@ -26,20 +26,20 @@ protected:
     }
 
     void SetUp() override {
-        fake_s3_ = std::make_shared<FakeS3Service>("test-bucket", "us-east-1");
-        fake_dynamodb_ = std::make_shared<FakeDynamoDBClient>();
-        album_service_ = std::make_shared<AlbumService>("test-table", fake_dynamodb_, fake_s3_);
+        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket", "us-east-1");
+        fake_db_client_ = std::make_shared<FakeDatabaseClient>();
+        album_service_ = std::make_shared<AlbumService>("test-table", fake_db_client_, fake_file_service_);
         image_processor_ = std::make_shared<ImageProcessor>();
-        cache_manager_ = std::make_shared<CacheManager>(fake_s3_);
+        cache_manager_ = std::make_shared<CacheManager>(fake_file_service_);
     }
 
     void TearDown() override {
-        fake_s3_->clear();
-        fake_dynamodb_->clear();
+        fake_file_service_->clear();
+        fake_db_client_->clear();
     }
 
-    std::shared_ptr<FakeS3Service> fake_s3_;
-    std::shared_ptr<FakeDynamoDBClient> fake_dynamodb_;
+    std::shared_ptr<FakeFileService> fake_file_service_;
+    std::shared_ptr<FakeDatabaseClient> fake_db_client_;
     std::shared_ptr<AlbumService> album_service_;
     std::shared_ptr<ImageProcessor> image_processor_;
     std::shared_ptr<CacheManager> cache_manager_;
@@ -129,8 +129,8 @@ TEST_F(ErrorHandlingTest, ReorderWithWrongImageCount) {
     Album album = album_service_->createAlbum(create_req);
 
     // Add 2 images
-    fake_s3_->uploadData({'d'}, "raw/img1.jpg");
-    fake_s3_->uploadData({'d'}, "raw/img2.jpg");
+    fake_file_service_->uploadData({'d'}, "raw/img1.jpg");
+    fake_file_service_->uploadData({'d'}, "raw/img2.jpg");
 
     AddImagesRequest add_req;
     add_req.image_ids = {"img1", "img2"};
@@ -151,7 +151,7 @@ TEST_F(ErrorHandlingTest, ReorderWithInvalidImageIds) {
     Album album = album_service_->createAlbum(create_req);
 
     // Add images
-    fake_s3_->uploadData({'d'}, "raw/img1.jpg");
+    fake_file_service_->uploadData({'d'}, "raw/img1.jpg");
     AddImagesRequest add_req;
     add_req.image_ids = {"img1"};
     album = album_service_->addImages(album.album_id, add_req);
@@ -451,7 +451,7 @@ TEST_F(ErrorHandlingTest, AddSameImageTwice) {
     create_req.name = "Test Album";
     Album album = album_service_->createAlbum(create_req);
 
-    fake_s3_->uploadData({'d'}, "raw/img1.jpg");
+    fake_file_service_->uploadData({'d'}, "raw/img1.jpg");
 
     AddImagesRequest add_req;
     add_req.image_ids = {"img1"};
