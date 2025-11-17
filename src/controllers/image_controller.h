@@ -4,6 +4,7 @@
 #include <crow.h>
 #include <memory>
 #include "../interfaces/file_service_interface.h"
+#include "../interfaces/database_client_interface.h"
 #include "../services/image_processor.h"
 #include "../services/cache_manager.h"
 #include "../interfaces/config_service_interface.h"
@@ -17,7 +18,8 @@ public:
                    std::shared_ptr<ImageProcessor> image_processor,
                    std::shared_ptr<CacheManager> cache_manager,
                    std::shared_ptr<ConfigServiceInterface> config_service,
-                   std::shared_ptr<WatermarkService> watermark_service);
+                   std::shared_ptr<WatermarkService> watermark_service,
+                   std::shared_ptr<DatabaseClientInterface> db_client);
 
     // Register routes with Crow app (templated to support middleware)
     template<typename App>
@@ -29,12 +31,16 @@ private:
     std::shared_ptr<CacheManager> cache_manager_;
     std::shared_ptr<ConfigServiceInterface> config_service_;
     std::shared_ptr<WatermarkService> watermark_service_;
+    std::shared_ptr<DatabaseClientInterface> db_client_;
 
     // Upload endpoint handler
     crow::response handleUpload(const crow::request& req);
 
     // Get/transform image endpoint handler
     crow::response handleGetImage(const crow::request& req, const std::string& image_id);
+
+    // List images endpoint handler
+    crow::response handleListImages(const crow::request& req);
 
     // Health check for image service
     crow::response handleHealthCheck(const crow::request& req);
@@ -66,6 +72,12 @@ void ImageController::registerRoutes(App& app) {
     CROW_ROUTE(app, "/api/images/upload").methods("POST"_method)
     ([this](const crow::request& req) {
         return handleUpload(req);
+    });
+
+    // List images (must come before /<string> route)
+    CROW_ROUTE(app, "/api/images").methods("GET"_method)
+    ([this](const crow::request& req) {
+        return handleListImages(req);
     });
 
     // Get/transform image

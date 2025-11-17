@@ -122,7 +122,7 @@ int main() {
     auto album_service = std::make_shared<gara::AlbumService>(db_client, file_service);
 
     // Initialize controllers
-    gara::ImageController image_controller(file_service, image_processor, cache_manager, config_service, watermark_service);
+    gara::ImageController image_controller(file_service, image_processor, cache_manager, config_service, watermark_service, db_client);
     gara::AlbumController album_controller(album_service, file_service, config_service);
 
     // Startup App with middleware

@@ -15,12 +15,14 @@ ImageController::ImageController(std::shared_ptr<FileServiceInterface> file_serv
                                 std::shared_ptr<ImageProcessor> image_processor,
                                 std::shared_ptr<CacheManager> cache_manager,
                                 std::shared_ptr<ConfigServiceInterface> config_service,
-                                std::shared_ptr<WatermarkService> watermark_service)
+                                std::shared_ptr<WatermarkService> watermark_service,
+                                std::shared_ptr<DatabaseClientInterface> db_client)
     : file_service_(file_service),
       image_processor_(image_processor),
       cache_manager_(cache_manager),
       config_service_(config_service),
-      watermark_service_(watermark_service) {
+      watermark_service_(watermark_service),
+      db_client_(db_client) {
 }
 
 // registerRoutes is now a template method in the header
@@ -304,6 +306,9 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
         return "";
     }
 
+    // Get image information (dimensions)
+    ImageInfo img_info = image_processor_->getImageInfo(temp_file.getPath());
+
     // Upload to S3
     std::string content_type = utils::FileUtils::getMimeType(extension);
     if (!file_service_->uploadFile(temp_file.getPath(), s3_key, content_type)) {
@@ -316,11 +321,37 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
         return "";
     }
 
+    // Store metadata in database
+    ImageMetadata metadata;
+    metadata.image_id = image_id;
+    metadata.original_format = extension;
+    metadata.s3_raw_key = s3_key;
+    metadata.original_size = file_data.size();
+    metadata.upload_timestamp = std::time(nullptr);
+
+    // Extract name from filename (remove extension)
+    size_t last_dot = filename.find_last_of('.');
+    metadata.name = (last_dot != std::string::npos) ? filename.substr(0, last_dot) : filename;
+
+    // Set dimensions from image info
+    metadata.width = img_info.width;
+    metadata.height = img_info.height;
+
+    if (!db_client_->putImageMetadata(metadata)) {
+        gara::Logger::log_structured(spdlog::level::warn, "Failed to store image metadata in database", {
+            {"image_id", image_id},
+            {"name", metadata.name}
+        });
+        // Don't fail upload if database storage fails
+    }
+
     gara::Logger::log_structured(spdlog::level::info, "Image uploaded successfully", {
         {"image_id", image_id},
         {"s3_key", s3_key},
         {"size_bytes", file_data.size()},
-        {"content_type", content_type}
+        {"content_type", content_type},
+        {"width", img_info.width},
+        {"height", img_info.height}
     });
     METRICS_COUNT("UploadOperations", 1.0, "Count", {{"status", "success"}});
     return image_id;
@@ -450,6 +481,132 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
 
     // Return the S3 key
     return request.getCacheKey();
+}
+
+crow::response ImageController::handleListImages(const crow::request& req) {
+    try {
+        // Parse query parameters with defaults
+        int limit = 100;
+        int offset = 0;
+        ImageSortOrder sort_order = ImageSortOrder::NEWEST;
+
+        // Extract limit parameter
+        auto limit_param = req.url_params.get("limit");
+        if (limit_param) {
+            try {
+                limit = std::stoi(limit_param);
+                if (limit < 1 || limit > 1000) {
+                    json error_response = {
+                        {"error", "Invalid limit parameter: must be between 1 and 1000"}
+                    };
+                    crow::response resp(400, error_response.dump());
+                    resp.add_header("Content-Type", "application/json");
+                    addCorsHeaders(resp);
+                    return resp;
+                }
+            } catch (const std::exception& e) {
+                json error_response = {
+                    {"error", "Invalid limit parameter: must be a valid integer"}
+                };
+                crow::response resp(400, error_response.dump());
+                resp.add_header("Content-Type", "application/json");
+                addCorsHeaders(resp);
+                return resp;
+            }
+        }
+
+        // Extract offset parameter
+        auto offset_param = req.url_params.get("offset");
+        if (offset_param) {
+            try {
+                offset = std::stoi(offset_param);
+                if (offset < 0) {
+                    json error_response = {
+                        {"error", "Invalid offset parameter: must be non-negative"}
+                    };
+                    crow::response resp(400, error_response.dump());
+                    resp.add_header("Content-Type", "application/json");
+                    addCorsHeaders(resp);
+                    return resp;
+                }
+            } catch (const std::exception& e) {
+                json error_response = {
+                    {"error", "Invalid offset parameter: must be a valid integer"}
+                };
+                crow::response resp(400, error_response.dump());
+                resp.add_header("Content-Type", "application/json");
+                addCorsHeaders(resp);
+                return resp;
+            }
+        }
+
+        // Extract sort parameter
+        auto sort_param = req.url_params.get("sort");
+        if (sort_param) {
+            std::string sort_str = sort_param;
+            if (sort_str == "newest") {
+                sort_order = ImageSortOrder::NEWEST;
+            } else if (sort_str == "oldest") {
+                sort_order = ImageSortOrder::OLDEST;
+            } else if (sort_str == "name_asc") {
+                sort_order = ImageSortOrder::NAME_ASC;
+            } else if (sort_str == "name_desc") {
+                sort_order = ImageSortOrder::NAME_DESC;
+            } else {
+                json error_response = {
+                    {"error", "Invalid sort parameter: must be one of 'newest', 'oldest', 'name_asc', 'name_desc'"}
+                };
+                crow::response resp(400, error_response.dump());
+                resp.add_header("Content-Type", "application/json");
+                addCorsHeaders(resp);
+                return resp;
+            }
+        }
+
+        // Get total count
+        int total = db_client_->getImageCount();
+
+        // Get images with pagination
+        std::vector<ImageMetadata> images = db_client_->listImages(limit, offset, sort_order);
+
+        // Build JSON response
+        json images_json = json::array();
+        for (const auto& img : images) {
+            images_json.push_back(img.toJson());
+        }
+
+        json response = {
+            {"images", images_json},
+            {"total", total},
+            {"limit", limit},
+            {"offset", offset}
+        };
+
+        gara::Logger::log_structured(spdlog::level::info, "Listed images successfully", {
+            {"total", total},
+            {"limit", limit},
+            {"offset", offset},
+            {"returned", images.size()}
+        });
+
+        crow::response resp(200, response.dump());
+        resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
+        return resp;
+
+    } catch (const std::exception& e) {
+        gara::Logger::log_structured(spdlog::level::err, "Failed to list images", {
+            {"error", e.what()}
+        });
+
+        json error_response = {
+            {"error", "Failed to retrieve image list"}
+        };
+        crow::response resp(500, error_response.dump());
+        resp.add_header("Content-Type", "application/json");
+        addCorsHeaders(resp);
+        return resp;
+    }
 }
 
 void ImageController::addCorsHeaders(crow::response& resp) {
