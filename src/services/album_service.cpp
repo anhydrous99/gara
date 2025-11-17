@@ -58,7 +58,7 @@ Album AlbumService::createAlbum(const CreateAlbumRequest& request) {
 
     // Create album
     Album album;
-    album.album_id = gara::IdGenerator::generateUUID();
+    album.album_id = utils::IdGenerator::generateAlbumId();
     album.name = request.name;
     album.description = request.description;
     album.cover_image_id = "";  // Not provided in CreateAlbumRequest
