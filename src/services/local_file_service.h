@@ -1,7 +1,7 @@
 #ifndef GARA_LOCAL_FILE_SERVICE_H
 #define GARA_LOCAL_FILE_SERVICE_H
 
-#include "s3_service.h"
+#include "../interfaces/file_service_interface.h"
 #include <filesystem>
 
 namespace gara {
@@ -12,7 +12,7 @@ namespace gara {
  * This service stores files on the local filesystem instead of S3.
  * It maintains the same directory structure as S3 for compatibility.
  */
-class LocalFileService : public S3Service {
+class LocalFileService : public FileServiceInterface {
 public:
     /**
      * @brief Constructor

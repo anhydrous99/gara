@@ -4,7 +4,7 @@
 #include <crow.h>
 #include <memory>
 #include "../services/album_service.h"
-#include "../services/s3_service.h"
+#include "../interfaces/file_service_interface.h"
 #include "../services/secrets_service.h"
 
 namespace gara {
@@ -13,7 +13,7 @@ class AlbumController {
 public:
     AlbumController(
         std::shared_ptr<AlbumService> album_service,
-        std::shared_ptr<S3Service> s3_service,
+        std::shared_ptr<FileServiceInterface> file_service,
         std::shared_ptr<SecretsService> secrets_service
     );
 
@@ -23,7 +23,7 @@ public:
 
 private:
     std::shared_ptr<AlbumService> album_service_;
-    std::shared_ptr<S3Service> s3_service_;
+    std::shared_ptr<FileServiceInterface> file_service_;
     std::shared_ptr<SecretsService> secrets_service_;
 
     // Route handlers

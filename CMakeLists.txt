@@ -96,11 +96,9 @@ add_library(gara_lib
     src/utils/logger.cpp
     src/utils/metrics.cpp
     src/db/sqlite_client.cpp
-    src/services/s3_service.cpp
     src/services/local_file_service.cpp
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
-    src/services/secrets_service.cpp
     src/services/local_config_service.cpp
     src/services/watermark_service.cpp
     src/services/album_service.cpp

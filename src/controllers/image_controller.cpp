@@ -11,12 +11,12 @@ using json = nlohmann::json;
 
 namespace gara {
 
-ImageController::ImageController(std::shared_ptr<S3Service> s3_service,
+ImageController::ImageController(std::shared_ptr<FileServiceInterface> file_service,
                                 std::shared_ptr<ImageProcessor> image_processor,
                                 std::shared_ptr<CacheManager> cache_manager,
                                 std::shared_ptr<SecretsService> secrets_service,
                                 std::shared_ptr<WatermarkService> watermark_service)
-    : s3_service_(s3_service),
+    : file_service_(s3_service),
       image_processor_(image_processor),
       cache_manager_(cache_manager),
       secrets_service_(secrets_service),
@@ -142,7 +142,7 @@ crow::response ImageController::handleGetImage(const crow::request& req,
         }
 
         // Generate presigned URL
-        std::string presigned_url = s3_service_->generatePresignedUrl(s3_key, 3600);
+        std::string presigned_url = file_service_->generatePresignedUrl(s3_key, 3600);
 
         json response = {
             {"image_id", image_id},
@@ -180,7 +180,7 @@ crow::response ImageController::handleHealthCheck(const crow::request& req) {
     json response = {
         {"status", "healthy"},
         {"service", "image-service"},
-        {"s3_bucket", s3_service_->getBucketName()}
+        {"s3_bucket", file_service_->getBucketName()}
     };
     crow::response resp(200, response.dump());
     resp.add_header("Content-Type", "application/json");
@@ -272,7 +272,7 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
     std::string s3_key = ImageMetadata::generateRawKey(image_id, extension);
 
     // Check if already uploaded (deduplication)
-    if (s3_service_->objectExists(s3_key)) {
+    if (file_service_->objectExists(s3_key)) {
         gara::Logger::log_structured(spdlog::level::info, "Image already exists (deduplicated)", {
             {"image_id", image_id},
             {"s3_key", s3_key},
@@ -306,7 +306,7 @@ std::string ImageController::processUpload(const std::vector<char>& file_data,
 
     // Upload to S3
     std::string content_type = utils::FileUtils::getMimeType(extension);
-    if (!s3_service_->uploadFile(temp_file.getPath(), s3_key, content_type)) {
+    if (!file_service_->uploadFile(temp_file.getPath(), s3_key, content_type)) {
         gara::Logger::log_structured(spdlog::level::err, "Failed to upload image to S3", {
             {"image_id", image_id},
             {"s3_key", s3_key},
@@ -360,7 +360,7 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
 
     for (const auto& ext : extensions) {
         std::string test_key = ImageMetadata::generateRawKey(request.image_id, ext);
-        if (s3_service_->objectExists(test_key)) {
+        if (file_service_->objectExists(test_key)) {
             found_raw_key = test_key;
             break;
         }
@@ -377,7 +377,7 @@ std::string ImageController::getOrCreateTransformed(const TransformRequest& requ
 
     // Download raw image to temp file
     utils::TempFile raw_temp("raw_");
-    if (!s3_service_->downloadFile(found_raw_key, raw_temp.getPath())) {
+    if (!file_service_->downloadFile(found_raw_key, raw_temp.getPath())) {
         gara::Logger::log_structured(spdlog::level::err, "Failed to download raw image from S3", {
             {"image_id", request.image_id},
             {"s3_key", found_raw_key}

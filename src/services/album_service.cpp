@@ -1,5 +1,5 @@
 #include "album_service.h"
-#include "s3_service.h"
+#include "../interfaces/file_service_interface.h"
 #include "../constants/album_constants.h"
 #include "../exceptions/album_exceptions.h"
 #include "../utils/id_generator.h"
@@ -11,20 +11,20 @@
 namespace gara {
 
 AlbumService::AlbumService(std::shared_ptr<DatabaseClientInterface> db_client,
-                           std::shared_ptr<S3Service> s3_service)
-    : db_client_(db_client), s3_service_(s3_service) {
+                           std::shared_ptr<FileServiceInterface> file_service)
+    : db_client_(db_client), file_service_(file_service) {
 }
 
 bool AlbumService::validateImageExists(const std::string& image_id) {
-    if (!s3_service_) {
-        // If no S3 service provided (e.g., in tests), skip validation
+    if (!file_service_) {
+        // If no file service provided (e.g., in tests), skip validation
         return true;
     }
 
     // Try common image formats
     for (const auto& format : constants::SUPPORTED_IMAGE_FORMATS) {
         std::string key = "raw/" + image_id + "." + format;
-        if (s3_service_->objectExists(key)) {
+        if (file_service_->objectExists(key)) {
             return true;
         }
     }

@@ -1,7 +1,7 @@
 #ifndef GARA_CACHE_MANAGER_H
 #define GARA_CACHE_MANAGER_H
 
-#include "s3_service.h"
+#include "../interfaces/file_service_interface.h"
 #include "../models/image_metadata.h"
 #include <string>
 #include <memory>
@@ -10,7 +10,7 @@ namespace gara {
 
 class CacheManager {
 public:
-    explicit CacheManager(std::shared_ptr<S3Service> s3_service);
+    explicit CacheManager(std::shared_ptr<FileServiceInterface> file_service);
     ~CacheManager() = default;
 
     // Check if transformed image exists in cache (S3)
@@ -33,10 +33,10 @@ public:
     bool clearTransformation(const TransformRequest& request);
 
 private:
-    std::shared_ptr<S3Service> s3_service_;
+    std::shared_ptr<FileServiceInterface> file_service_;
 
-    // Generate S3 key for transformed image
-    std::string getS3Key(const TransformRequest& request);
+    // Generate storage key for transformed image
+    std::string getStorageKey(const TransformRequest& request);
 };
 
 } // namespace gara

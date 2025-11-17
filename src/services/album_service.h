@@ -10,17 +10,17 @@
 namespace gara {
 
 // Forward declaration
-class S3Service;
+class FileServiceInterface;
 
 class AlbumService {
 public:
     /**
      * @brief Constructor with database client injection
      * @param db_client Database client interface (for dependency injection)
-     * @param s3_service Optional S3 service for image validation
+     * @param file_service Optional file service for image validation
      */
     AlbumService(std::shared_ptr<DatabaseClientInterface> db_client,
-                 std::shared_ptr<S3Service> s3_service = nullptr);
+                 std::shared_ptr<FileServiceInterface> file_service = nullptr);
 
     // CRUD operations
     Album createAlbum(const CreateAlbumRequest& request);
@@ -36,9 +36,9 @@ public:
 
 private:
     std::shared_ptr<DatabaseClientInterface> db_client_;
-    std::shared_ptr<S3Service> s3_service_;
+    std::shared_ptr<FileServiceInterface> file_service_;
 
-    // Helper: Validate image exists in S3
+    // Helper: Validate image exists in storage
     bool validateImageExists(const std::string& image_id);
 };
 

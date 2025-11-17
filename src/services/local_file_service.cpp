@@ -6,8 +6,7 @@
 namespace gara {
 
 LocalFileService::LocalFileService(const std::string& storage_path)
-    : S3Service(storage_path, "local", true),  // Skip AWS SDK initialization
-      storage_path_(storage_path) {
+    : storage_path_(storage_path) {
 
     // Create storage directory if it doesn't exist
     try {
