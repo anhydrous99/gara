@@ -5,8 +5,7 @@
 namespace gara {
 
 LocalConfigService::LocalConfigService(const std::string& api_key_env_var)
-    : SecretsService(api_key_env_var, "local", 0, true),  // Skip AWS initialization
-      api_key_env_var_(api_key_env_var) {
+    : api_key_env_var_(api_key_env_var), initialized_(false) {
 
     // Try to read API key on initialization
     cached_api_key_ = readApiKeyFromEnv();

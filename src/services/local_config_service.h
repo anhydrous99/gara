@@ -1,7 +1,7 @@
 #ifndef GARA_LOCAL_CONFIG_SERVICE_H
 #define GARA_LOCAL_CONFIG_SERVICE_H
 
-#include "secrets_service.h"
+#include "../interfaces/config_service_interface.h"
 #include <string>
 #include <mutex>
 
@@ -12,9 +12,8 @@ namespace gara {
  *
  * This service reads configuration from environment variables
  * instead of AWS Secrets Manager for local development.
- * Inherits from SecretsService for compatibility.
  */
-class LocalConfigService : public SecretsService {
+class LocalConfigService : public ConfigServiceInterface {
 public:
     /**
      * @brief Constructor
@@ -39,6 +38,12 @@ public:
      * @return true if API key is set
      */
     bool isInitialized() const override;
+
+    /**
+     * @brief Get the environment variable name being used
+     * @return environment variable name
+     */
+    const std::string& getSecretName() const override { return api_key_env_var_; }
 
 private:
     std::string api_key_env_var_;

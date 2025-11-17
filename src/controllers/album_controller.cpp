@@ -14,10 +14,10 @@ namespace gara {
 AlbumController::AlbumController(
     std::shared_ptr<AlbumService> album_service,
     std::shared_ptr<FileServiceInterface> file_service,
-    std::shared_ptr<SecretsService> secrets_service)
+    std::shared_ptr<ConfigServiceInterface> config_service)
     : album_service_(album_service),
       file_service_(s3_service),
-      secrets_service_(secrets_service) {
+      config_service_(secrets_service) {
 }
 
 // registerRoutes is now a template method in the header
@@ -141,7 +141,7 @@ void AlbumController::addCorsHeaders(crow::response& resp) {
 }
 
 bool AlbumController::validateAuth(const crow::request& req) {
-    std::string api_key = secrets_service_->getApiKey();
+    std::string api_key = config_service_->getApiKey();
     return middleware::AuthMiddleware::validateApiKey(req, api_key);
 }
 

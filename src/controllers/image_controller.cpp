@@ -14,12 +14,12 @@ namespace gara {
 ImageController::ImageController(std::shared_ptr<FileServiceInterface> file_service,
                                 std::shared_ptr<ImageProcessor> image_processor,
                                 std::shared_ptr<CacheManager> cache_manager,
-                                std::shared_ptr<SecretsService> secrets_service,
+                                std::shared_ptr<ConfigServiceInterface> config_service,
                                 std::shared_ptr<WatermarkService> watermark_service)
     : file_service_(s3_service),
       image_processor_(image_processor),
       cache_manager_(cache_manager),
-      secrets_service_(secrets_service),
+      config_service_(secrets_service),
       watermark_service_(watermark_service) {
 }
 
@@ -28,7 +28,7 @@ ImageController::ImageController(std::shared_ptr<FileServiceInterface> file_serv
 crow::response ImageController::handleUpload(const crow::request& req) {
     try {
         // Authenticate request using API key
-        std::string api_key = secrets_service_->getApiKey();
+        std::string api_key = config_service_->getApiKey();
 
         if (!middleware::AuthMiddleware::validateApiKey(req, api_key)) {
             std::string provided_key = middleware::AuthMiddleware::extractApiKey(req);

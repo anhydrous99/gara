@@ -5,7 +5,7 @@
 #include <memory>
 #include "../services/album_service.h"
 #include "../interfaces/file_service_interface.h"
-#include "../services/secrets_service.h"
+#include "../interfaces/config_service_interface.h"
 
 namespace gara {
 
@@ -14,7 +14,7 @@ public:
     AlbumController(
         std::shared_ptr<AlbumService> album_service,
         std::shared_ptr<FileServiceInterface> file_service,
-        std::shared_ptr<SecretsService> secrets_service
+        std::shared_ptr<ConfigServiceInterface> config_service
     );
 
     // Register routes with Crow app (templated to support middleware)
@@ -24,7 +24,7 @@ public:
 private:
     std::shared_ptr<AlbumService> album_service_;
     std::shared_ptr<FileServiceInterface> file_service_;
-    std::shared_ptr<SecretsService> secrets_service_;
+    std::shared_ptr<ConfigServiceInterface> config_service_;
 
     // Route handlers
     crow::response handleCreateAlbum(const crow::request& req);
