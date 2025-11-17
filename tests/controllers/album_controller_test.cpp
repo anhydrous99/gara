@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include "controllers/album_controller.h"
 #include "services/album_service.h"
-#include "services/secrets_service.h"
-#include "mocks/mock_s3_service.h"
+#include "services/local_config_service.h"
+#include "mocks/fake_file_service.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
 #include <memory>
@@ -19,18 +19,18 @@ protected:
         gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
-        // Use fake S3 service
-        fake_s3_ = std::make_shared<FakeS3Service>("test-bucket", "us-east-1");
+        // Use fake file service
+        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket");
 
         // Note: Not creating AlbumService or AlbumController here as they would
         // initialize real AWS services. These tests focus on data serialization.
     }
 
     void TearDown() override {
-        fake_s3_->clear();
+        fake_file_service_->clear();
     }
 
-    std::shared_ptr<FakeS3Service> fake_s3_;
+    std::shared_ptr<FakeFileService> fake_file_service_;
 };
 
 // Test JSON serialization/deserialization for requests

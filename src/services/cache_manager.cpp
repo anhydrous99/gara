@@ -5,20 +5,20 @@
 
 namespace gara {
 
-CacheManager::CacheManager(std::shared_ptr<S3Service> s3_service)
-    : s3_service_(s3_service) {
+CacheManager::CacheManager(std::shared_ptr<FileServiceInterface> file_service)
+    : file_service_(file_service) {
 }
 
 bool CacheManager::existsInCache(const TransformRequest& request) {
-    std::string s3_key = getS3Key(request);
-    return s3_service_->objectExists(s3_key);
+    std::string storage_key = getStorageKey(request);
+    return file_service_->objectExists(storage_key);
 }
 
 std::string CacheManager::getCachedImage(const TransformRequest& request) {
-    std::string s3_key = getS3Key(request);
+    std::string storage_key = getStorageKey(request);
 
-    if (s3_service_->objectExists(s3_key)) {
-        return s3_key;
+    if (file_service_->objectExists(storage_key)) {
+        return storage_key;
     }
 
     return "";
@@ -27,14 +27,14 @@ std::string CacheManager::getCachedImage(const TransformRequest& request) {
 bool CacheManager::storeInCache(const TransformRequest& request, const std::string& local_path) {
     auto timer = gara::Metrics::get()->start_timer("CacheDuration", {{"operation", "put"}});
 
-    std::string s3_key = getS3Key(request);
+    std::string storage_key = getStorageKey(request);
     std::string content_type = utils::FileUtils::getMimeType(request.target_format);
 
-    bool success = s3_service_->uploadFile(local_path, s3_key, content_type);
+    bool success = file_service_->uploadFile(local_path, storage_key, content_type);
 
     if (success) {
         gara::Logger::log_structured(spdlog::level::info, "Cached transformed image", {
-            {"s3_key", s3_key},
+            {"storage_key", storage_key},
             {"image_id", request.image_id},
             {"format", request.target_format},
             {"width", request.width},
@@ -44,7 +44,7 @@ bool CacheManager::storeInCache(const TransformRequest& request, const std::stri
         METRICS_COUNT("CacheOperations", 1.0, "Count", {{"operation", "put"}, {"status", "success"}});
     } else {
         gara::Logger::log_structured(spdlog::level::err, "Failed to cache transformed image", {
-            {"s3_key", s3_key},
+            {"storage_key", storage_key},
             {"image_id", request.image_id},
             {"format", request.target_format},
             {"local_path", local_path}
@@ -56,13 +56,13 @@ bool CacheManager::storeInCache(const TransformRequest& request, const std::stri
 }
 
 std::string CacheManager::getPresignedUrl(const TransformRequest& request, int expiration_seconds) {
-    std::string s3_key = getS3Key(request);
+    std::string storage_key = getStorageKey(request);
 
-    if (!s3_service_->objectExists(s3_key)) {
+    if (!file_service_->objectExists(storage_key)) {
         return "";
     }
 
-    return s3_service_->generatePresignedUrl(s3_key, expiration_seconds);
+    return file_service_->generatePresignedUrl(storage_key, expiration_seconds);
 }
 
 bool CacheManager::clearImageCache(const std::string& image_id) {
@@ -79,11 +79,11 @@ bool CacheManager::clearImageCache(const std::string& image_id) {
 }
 
 bool CacheManager::clearTransformation(const TransformRequest& request) {
-    std::string s3_key = getS3Key(request);
-    return s3_service_->deleteObject(s3_key);
+    std::string storage_key = getStorageKey(request);
+    return file_service_->deleteObject(storage_key);
 }
 
-std::string CacheManager::getS3Key(const TransformRequest& request) {
+std::string CacheManager::getStorageKey(const TransformRequest& request) {
     return ImageMetadata::generateTransformedKey(
         request.image_id,
         request.target_format,

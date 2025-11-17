@@ -3,20 +3,20 @@
 
 #include <crow.h>
 #include <memory>
-#include "../services/s3_service.h"
+#include "../interfaces/file_service_interface.h"
 #include "../services/image_processor.h"
 #include "../services/cache_manager.h"
-#include "../services/secrets_service.h"
+#include "../interfaces/config_service_interface.h"
 #include "../services/watermark_service.h"
 
 namespace gara {
 
 class ImageController {
 public:
-    ImageController(std::shared_ptr<S3Service> s3_service,
+    ImageController(std::shared_ptr<FileServiceInterface> file_service,
                    std::shared_ptr<ImageProcessor> image_processor,
                    std::shared_ptr<CacheManager> cache_manager,
-                   std::shared_ptr<SecretsService> secrets_service,
+                   std::shared_ptr<ConfigServiceInterface> config_service,
                    std::shared_ptr<WatermarkService> watermark_service);
 
     // Register routes with Crow app (templated to support middleware)
@@ -24,10 +24,10 @@ public:
     void registerRoutes(App& app);
 
 private:
-    std::shared_ptr<S3Service> s3_service_;
+    std::shared_ptr<FileServiceInterface> file_service_;
     std::shared_ptr<ImageProcessor> image_processor_;
     std::shared_ptr<CacheManager> cache_manager_;
-    std::shared_ptr<SecretsService> secrets_service_;
+    std::shared_ptr<ConfigServiceInterface> config_service_;
     std::shared_ptr<WatermarkService> watermark_service_;
 
     // Upload endpoint handler

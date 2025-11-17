@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include "services/album_service.h"
 #include "models/album.h"
-#include "mocks/mock_s3_service.h"
-#include "mocks/fake_dynamodb_client.h"
+#include "mocks/fake_file_service.h"
+#include "mocks/fake_database_client.h"
 #include "exceptions/album_exceptions.h"
 #include "test_helpers/test_constants.h"
 #include "test_helpers/test_builders.h"
@@ -25,31 +25,30 @@ protected:
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
         // Use fake services for testing
-        fake_s3_ = std::make_shared<FakeS3Service>(TEST_BUCKET_NAME, TEST_REGION);
-        fake_dynamodb_ = std::make_shared<FakeDynamoDBClient>();
+        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME);
+        fake_db_client_ = std::make_shared<FakeDatabaseClient>();
 
         // Create AlbumService with fake clients
         album_service_ = std::make_shared<AlbumService>(
-            TEST_ALBUMS_TABLE_NAME,
-            fake_dynamodb_,
-            fake_s3_
+            fake_db_client_,
+            fake_file_service_
         );
     }
 
     void TearDown() override {
-        fake_s3_->clear();
-        fake_dynamodb_->clear();
+        fake_file_service_->clear();
+        fake_db_client_->clear();
     }
 
     // Helper to upload fake images to S3
     void uploadFakeImage(const std::string& image_id, const std::string& format = FORMAT_JPG) {
         auto key = TestDataBuilder::createRawImageKey(image_id, format);
         auto fake_data = TestDataBuilder::createData(SMALL_DATA_SIZE);
-        fake_s3_->uploadData(fake_data, key);
+        fake_file_service_->uploadData(fake_data, key);
     }
 
-    std::shared_ptr<FakeS3Service> fake_s3_;
-    std::shared_ptr<FakeDynamoDBClient> fake_dynamodb_;
+    std::shared_ptr<FakeFileService> fake_file_service_;
+    std::shared_ptr<FakeDatabaseClient> fake_db_client_;
     std::shared_ptr<AlbumService> album_service_;
 };
 

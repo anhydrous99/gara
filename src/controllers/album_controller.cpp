@@ -13,11 +13,11 @@ namespace gara {
 
 AlbumController::AlbumController(
     std::shared_ptr<AlbumService> album_service,
-    std::shared_ptr<S3Service> s3_service,
-    std::shared_ptr<SecretsService> secrets_service)
+    std::shared_ptr<FileServiceInterface> file_service,
+    std::shared_ptr<ConfigServiceInterface> config_service)
     : album_service_(album_service),
-      s3_service_(s3_service),
-      secrets_service_(secrets_service) {
+      file_service_(file_service),
+      config_service_(config_service) {
 }
 
 // registerRoutes is now a template method in the header
@@ -141,7 +141,7 @@ void AlbumController::addCorsHeaders(crow::response& resp) {
 }
 
 bool AlbumController::validateAuth(const crow::request& req) {
-    std::string api_key = secrets_service_->getApiKey();
+    std::string api_key = config_service_->getApiKey();
     return middleware::AuthMiddleware::validateApiKey(req, api_key);
 }
 
@@ -149,8 +149,8 @@ std::string AlbumController::generatePresignedUrlForImage(const std::string& ima
     // Try common image formats to find the image in S3
     for (const auto& format : constants::SUPPORTED_IMAGE_FORMATS) {
         std::string key = ImageMetadata::generateRawKey(image_id, format);
-        if (s3_service_->objectExists(key)) {
-            return s3_service_->generatePresignedUrl(key, constants::PRESIGNED_URL_EXPIRATION_SECONDS);
+        if (file_service_->objectExists(key)) {
+            return file_service_->generatePresignedUrl(key, constants::PRESIGNED_URL_EXPIRATION_SECONDS);
         }
     }
 

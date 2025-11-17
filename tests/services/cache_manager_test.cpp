@@ -4,7 +4,7 @@
 #include "utils/file_utils.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
-#include "mocks/mock_s3_service.h"
+#include "mocks/fake_file_service.h"
 #include "test_helpers/test_constants.h"
 #include "test_helpers/test_builders.h"
 #include "test_helpers/test_file_manager.h"
@@ -26,22 +26,22 @@ protected:
         gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
-        fake_s3_ = std::make_shared<FakeS3Service>(TEST_BUCKET_NAME, TEST_REGION);
-        cache_manager_ = std::make_shared<CacheManager>(fake_s3_);
+        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME);
+        cache_manager_ = std::make_shared<CacheManager>(fake_file_service_);
     }
 
     void TearDown() override {
-        fake_s3_->clear();
+        fake_file_service_->clear();
     }
 
     // Helper to upload fake transformed image
     void uploadFakeTransformedImage(const TransformRequest& request) {
         std::string s3_key = request.getCacheKey();
         auto fake_data = TestDataBuilder::createData(SMALL_DATA_SIZE);
-        fake_s3_->uploadData(fake_data, s3_key);
+        fake_file_service_->uploadData(fake_data, s3_key);
     }
 
-    std::shared_ptr<FakeS3Service> fake_s3_;
+    std::shared_ptr<FakeFileService> fake_file_service_;
     std::shared_ptr<CacheManager> cache_manager_;
 };
 
@@ -384,7 +384,7 @@ TEST_F(CacheManagerTest, Cache_DifferentFormatsSameImage_StoresSeparately) {
         << "WebP format should be cached";
 
     // Assert - Verify object count in S3
-    EXPECT_EQ(3, fake_s3_->getObjectCount())
+    EXPECT_EQ(3, fake_file_service_->getObjectCount())
         << "Should have 3 separate cached objects in S3";
 }
 

@@ -28,6 +28,7 @@ find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
+find_package(SQLite3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
@@ -59,20 +60,6 @@ FetchContent_Declare(
     GIT_TAG v3.11.3
 )
 FetchContent_MakeAvailable(json)
-
-# Fetch AWS SDK
-set(BUILD_ONLY "dynamodb;s3;secretsmanager" CACHE STRING "AWS SDK components to build")
-set(ENABLE_TESTING OFF CACHE BOOL "Disable AWS SDK tests")
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build AWS SDK as static libraries")
-set(FORCE_SHARED_CRT OFF CACHE BOOL "Use static CRT")
-set(USE_SYSTEM_CURL ON CACHE BOOL "Use system CURL library")
-
-FetchContent_Declare(
-    awssdk
-    GIT_REPOSITORY https://github.com/aws/aws-sdk-cpp.git
-    GIT_TAG 1.11.474  # Updated to latest stable version with better CMake 4.x support
-)
-FetchContent_MakeAvailable(awssdk)
 
 # Fetch spdlog for structured logging
 FetchContent_Declare(
@@ -108,10 +95,11 @@ add_library(gara_lib
     src/utils/id_generator.cpp
     src/utils/logger.cpp
     src/utils/metrics.cpp
-    src/services/s3_service.cpp
+    src/db/sqlite_client.cpp
+    src/services/local_file_service.cpp
     src/services/image_processor.cpp
     src/services/cache_manager.cpp
-    src/services/secrets_service.cpp
+    src/services/local_config_service.cpp
     src/services/watermark_service.cpp
     src/services/album_service.cpp
     src/middleware/auth_middleware.cpp
@@ -135,14 +123,11 @@ target_link_libraries(gara_lib
     OpenSSL::SSL
     OpenSSL::Crypto
     ZLIB::ZLIB
+    SQLite::SQLite3
     Crow::Crow
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     Threads::Threads
-    aws-cpp-sdk-s3
-    aws-cpp-sdk-secretsmanager
-    aws-cpp-sdk-dynamodb
-    aws-cpp-sdk-core
     vips-cpp
     ${GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
