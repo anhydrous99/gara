@@ -12,6 +12,20 @@
 
 namespace gara {
 
+// Constants for image listing API
+namespace ImageListingConfig {
+    constexpr int DEFAULT_LIMIT = 100;
+    constexpr int MAX_LIMIT = 1000;
+    constexpr int DEFAULT_OFFSET = 0;
+}
+
+// Structure to hold parsed list parameters
+struct ListImageParams {
+    int limit = ImageListingConfig::DEFAULT_LIMIT;
+    int offset = ImageListingConfig::DEFAULT_OFFSET;
+    ImageSortOrder sort_order = ImageSortOrder::NEWEST;
+};
+
 class ImageController {
 public:
     ImageController(std::shared_ptr<FileServiceInterface> file_service,
@@ -63,6 +77,17 @@ private:
 
     // Helper: Add CORS headers to response
     void addCorsHeaders(crow::response& resp);
+
+    // Helper: Create JSON error response with CORS headers
+    crow::response createJsonError(int status_code, const std::string& error_message);
+
+    // Helper: Parse and validate list image parameters
+    std::optional<ListImageParams> parseListParams(const crow::request& req, std::string& error_message);
+
+    // Helper: Store image metadata in database
+    bool storeImageMetadata(const std::string& image_id, const std::string& filename,
+                           const std::string& extension, size_t file_size,
+                           const ImageInfo& img_info);
 };
 
 // Template implementation must be in header
