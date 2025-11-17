@@ -26,7 +26,7 @@ protected:
         gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
-        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME, TEST_REGION);
+        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME);
         cache_manager_ = std::make_shared<CacheManager>(fake_file_service_);
     }
 

@@ -25,12 +25,11 @@ protected:
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
         // Use fake services for testing
-        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME, TEST_REGION);
+        fake_file_service_ = std::make_shared<FakeFileService>(TEST_BUCKET_NAME);
         fake_db_client_ = std::make_shared<FakeDatabaseClient>();
 
         // Create AlbumService with fake clients
         album_service_ = std::make_shared<AlbumService>(
-            TEST_ALBUMS_TABLE_NAME,
             fake_db_client_,
             fake_file_service_
         );
