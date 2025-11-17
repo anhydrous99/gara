@@ -175,7 +175,7 @@ vips::VImage WatermarkService::createTextImage(const std::string& text, int font
             vips::VImage rgb = textImg.extract_band(0, vips::VImage::option()
                 ->set("n", 3));  // Extract RGB channels
             vips::VImage alpha_channel = textImg.extract_band(3);
-            alpha_channel = alpha_channel.linear({config_.opacity}, {0});
+            alpha_channel = alpha_channel.linear(config_.opacity, 0);
             textImg = rgb.bandjoin(alpha_channel);
         }
 
@@ -207,7 +207,7 @@ vips::VImage WatermarkService::createShadow(const vips::VImage& textImage, int o
             .new_from_image(black);
 
         // Combine black RGB with alpha channel (slightly reduced for shadow effect)
-        vips::VImage shadowAlpha = alpha.linear({0.7}, {0});  // 70% opacity for shadow
+        vips::VImage shadowAlpha = alpha.linear(0.7, 0);  // 70% opacity for shadow
         vips::VImage shadow = blackImg.bandjoin(shadowAlpha);
 
         return shadow;
