@@ -26,9 +26,9 @@ protected:
     }
 
     void SetUp() override {
-        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket", "us-east-1");
+        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket");
         fake_db_client_ = std::make_shared<FakeDatabaseClient>();
-        album_service_ = std::make_shared<AlbumService>("test-table", fake_db_client_, fake_file_service_);
+        album_service_ = std::make_shared<AlbumService>(fake_db_client_, fake_file_service_);
         image_processor_ = std::make_shared<ImageProcessor>();
         cache_manager_ = std::make_shared<CacheManager>(fake_file_service_);
     }

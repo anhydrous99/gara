@@ -19,8 +19,8 @@ protected:
         gara::Logger::initialize("gara-test", "error", gara::Logger::Format::TEXT, "test");
         gara::Metrics::initialize("GaraTest", "gara-test", "test", false);
 
-        // Use fake S3 service
-        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket", "us-east-1");
+        // Use fake file service
+        fake_file_service_ = std::make_shared<FakeFileService>("test-bucket");
 
         // Note: Not creating AlbumService or AlbumController here as they would
         // initialize real AWS services. These tests focus on data serialization.
