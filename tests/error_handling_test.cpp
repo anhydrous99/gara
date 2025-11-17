@@ -9,6 +9,8 @@
 #include "exceptions/album_exceptions.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <thread>
+#include <atomic>
 
 using namespace gara;
 using namespace gara::utils;
