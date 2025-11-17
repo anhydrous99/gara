@@ -1,25 +1,24 @@
 #include <crow.h>
 #include <crow/compression.h>
-#include <aws/core/Aws.h>
 #include <iostream>
 #include <memory>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 
-#include "services/s3_service.h"
+#include "services/local_file_service.h"
 #include "services/image_processor.h"
 #include "services/cache_manager.h"
-#include "services/secrets_service.h"
+#include "services/local_config_service.h"
 #include "services/watermark_service.h"
 #include "services/album_service.h"
-#include "services/dynamodb_client_wrapper.h"
+#include "db/sqlite_client.h"
 #include "controllers/image_controller.h"
 #include "controllers/album_controller.h"
 #include "models/watermark_config.h"
 #include "middleware/request_context_middleware.h"
 #include "utils/logger.h"
 #include "utils/metrics.h"
-#include <aws/dynamodb/DynamoDBClient.h>
 
 int main() {
     // Get logging configuration from environment
@@ -49,10 +48,6 @@ int main() {
 
     gara::Metrics::initialize(metrics_namespace, "gara-image", environment, metrics_enabled);
 
-    // Initialize AWS SDK
-    Aws::SDKOptions options;
-    Aws::InitAPI(options);
-
     // Initialize libvips
     if (!gara::ImageProcessor::initialize()) {
         LOG_CRITICAL("Failed to initialize image processor");
@@ -60,29 +55,51 @@ int main() {
     }
 
     // Get configuration from environment
-    const char* bucket_env = std::getenv("S3_BUCKET_NAME");
-    const char* region_env = std::getenv("AWS_REGION");
-    const char* secret_name_env = std::getenv("SECRETS_MANAGER_API_KEY_NAME");
-    const char* dynamodb_table_env = std::getenv("DYNAMODB_TABLE_NAME");
+    const char* storage_path_env = std::getenv("STORAGE_PATH");
+    const char* db_path_env = std::getenv("DATABASE_PATH");
+    const char* api_key_env_var = std::getenv("API_KEY_ENV_VAR");
 
-    std::string bucket_name = bucket_env ? bucket_env : "gara-images";
-    std::string region = region_env ? region_env : "us-east-1";
-    std::string secret_name = secret_name_env ? secret_name_env : "gara-api-key";
-    std::string dynamodb_table = dynamodb_table_env ? dynamodb_table_env : "gara-albums";
+    std::string storage_path = storage_path_env ? storage_path_env : "./data/images";
+    std::string db_path = db_path_env ? db_path_env : "./data/gara.db";
+    std::string api_key_var = api_key_env_var ? api_key_env_var : "API_KEY";
 
-    LOG_INFO("Starting Gara Image Service");
+    LOG_INFO("Starting Gara Image Service (Local Mode)");
     gara::Logger::log_structured(spdlog::level::info, "Service configuration", {
-        {"s3_bucket", bucket_name},
-        {"aws_region", region},
-        {"api_key_secret", secret_name},
-        {"dynamodb_table", dynamodb_table}
+        {"storage_path", storage_path},
+        {"database_path", db_path},
+        {"api_key_env_var", api_key_var},
+        {"mode", "local"}
     });
 
+    // Create data directories if they don't exist
+    try {
+        std::filesystem::create_directories(storage_path);
+        std::filesystem::create_directories(std::filesystem::path(db_path).parent_path());
+        LOG_INFO("Data directories created/verified");
+    } catch (const std::exception& e) {
+        LOG_ERROR("Failed to create data directories: " + std::string(e.what()));
+        return 1;
+    }
+
+    // Initialize SQLite database
+    std::shared_ptr<gara::SQLiteClient> db_client;
+    try {
+        db_client = std::make_shared<gara::SQLiteClient>(db_path);
+        if (!db_client->initialize()) {
+            LOG_CRITICAL("Failed to initialize database schema");
+            return 1;
+        }
+        LOG_INFO("Database initialized successfully");
+    } catch (const std::exception& e) {
+        LOG_CRITICAL("Failed to open database: " + std::string(e.what()));
+        return 1;
+    }
+
     // Initialize services
-    auto s3_service = std::make_shared<gara::S3Service>(bucket_name, region);
+    auto file_service = std::make_shared<gara::LocalFileService>(storage_path);
     auto image_processor = std::make_shared<gara::ImageProcessor>();
-    auto cache_manager = std::make_shared<gara::CacheManager>(s3_service);
-    auto secrets_service = std::make_shared<gara::SecretsService>(secret_name, region);
+    auto cache_manager = std::make_shared<gara::CacheManager>(file_service);
+    auto config_service = std::make_shared<gara::LocalConfigService>(api_key_var);
 
     // Initialize watermark service
     auto watermark_config = gara::WatermarkConfig::fromEnvironment();
@@ -93,25 +110,20 @@ int main() {
         {"text", watermark_config.text}
     });
 
-    // Check if secrets service is initialized
-    if (!secrets_service->isInitialized()) {
-        LOG_WARN("Failed to retrieve API key from Secrets Manager - authentication will not work");
+    // Check if config service has API key
+    if (!config_service->isInitialized()) {
+        LOG_WARN("API key not configured - authentication will not work");
+        LOG_WARN("Set " + api_key_var + " environment variable to enable authentication");
     } else {
         LOG_INFO("API key authentication enabled");
     }
 
-    // Initialize DynamoDB client
-    Aws::Client::ClientConfiguration dynamodb_config;
-    dynamodb_config.region = region.c_str();
-    auto dynamodb_client = std::make_shared<Aws::DynamoDB::DynamoDBClient>(dynamodb_config);
-    auto dynamodb_wrapper = std::make_shared<gara::DynamoDBClientWrapper>(dynamodb_client);
-
     // Initialize album service
-    auto album_service = std::make_shared<gara::AlbumService>(dynamodb_table, dynamodb_wrapper, s3_service);
+    auto album_service = std::make_shared<gara::AlbumService>(db_client, file_service);
 
     // Initialize controllers
-    gara::ImageController image_controller(s3_service, image_processor, cache_manager, secrets_service, watermark_service);
-    gara::AlbumController album_controller(album_service, s3_service, secrets_service);
+    gara::ImageController image_controller(file_service, image_processor, cache_manager, config_service, watermark_service);
+    gara::AlbumController album_controller(album_service, file_service, config_service);
 
     // Startup App with middleware
     using App = crow::App<gara::RequestContextMiddleware>;
@@ -119,21 +131,22 @@ int main() {
 
     // Basic routes
     CROW_ROUTE(app, "/")([](){
-        return "Gara Image Service - Upload and transform images on AWS";
+        return "Gara Image Service - Local image storage and transformation";
     });
 
-    CROW_ROUTE(app, "/health")([s3_service, secrets_service]() {
+    CROW_ROUTE(app, "/health")([file_service, config_service]() {
         nlohmann::json health_status = {
             {"status", "healthy"},
             {"timestamp", gara::Logger::get_timestamp()},
+            {"mode", "local"},
             {"services", {
-                {"s3", s3_service != nullptr ? "ok" : "unavailable"},
-                {"secrets_manager", secrets_service && secrets_service->isInitialized() ? "ok" : "unavailable"}
+                {"storage", file_service != nullptr ? "ok" : "unavailable"},
+                {"config", config_service && config_service->isInitialized() ? "ok" : "unavailable"}
             }}
         };
 
         // Simple health check - return 200 if core services are available
-        int status_code = (s3_service != nullptr) ? 200 : 503;
+        int status_code = (file_service != nullptr) ? 200 : 503;
         if (status_code != 200) {
             health_status["status"] = "degraded";
         }
@@ -197,7 +210,8 @@ int main() {
         {"port", port},
         {"log_level", log_level},
         {"log_format", log_format_str},
-        {"metrics_enabled", metrics_enabled}
+        {"metrics_enabled", metrics_enabled},
+        {"mode", "local"}
     });
 
     // Run app
@@ -208,7 +222,6 @@ int main() {
 
     // Cleanup
     gara::ImageProcessor::shutdown();
-    Aws::ShutdownAPI(options);
 
     return 0;
 }
