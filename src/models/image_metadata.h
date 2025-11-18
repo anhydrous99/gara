@@ -3,6 +3,7 @@
 
 #include <string>
 #include <ctime>
+#include <nlohmann/json.hpp>
 
 namespace gara {
 
@@ -12,6 +13,11 @@ struct ImageMetadata {
     std::string s3_raw_key;        // S3 key for raw image
     size_t original_size;          // File size in bytes
     std::time_t upload_timestamp;  // When uploaded
+
+    // New fields for API listing
+    std::string name;              // Original filename without extension
+    int width;                     // Image width in pixels (0 if unknown)
+    int height;                    // Image height in pixels (0 if unknown)
 
     // Constructor
     ImageMetadata();
@@ -26,6 +32,9 @@ struct ImageMetadata {
                                              const std::string& format,
                                              int width, int height,
                                              bool watermarked = false);
+
+    // Convert to JSON for API response
+    nlohmann::json toJson() const;
 };
 
 struct TransformRequest {

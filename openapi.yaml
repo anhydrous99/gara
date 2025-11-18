@@ -1,8 +1,14 @@
 openapi: 3.0.0
 info:
   title: Gara Image Service API
-  description: Upload and transform images on AWS S3 with caching
-  version: 1.0.0
+  description: |
+    Upload and transform images with local storage and caching.
+    Supports image transformations, watermarking, and album management.
+
+    **Storage**: Local filesystem (configurable via STORAGE_PATH)
+    **Database**: SQLite (configurable via DATABASE_PATH)
+    **Authentication**: API key via X-API-Key header for write operations
+  version: 2.0.0
   contact:
     name: Gara Image Service
 
@@ -17,6 +23,8 @@ paths:
     get:
       summary: Service information
       description: Returns basic information about the Gara Image Service
+      tags:
+        - General
       responses:
         '200':
           description: Service information
@@ -24,25 +32,32 @@ paths:
             text/plain:
               schema:
                 type: string
-                example: "Gara Image Service - Upload and transform images on AWS"
+                example: "Gara Image Service - Local image storage and transformation"
 
   /health:
     get:
       summary: Health check
       description: Check if the service is running
+      tags:
+        - Health
       responses:
         '200':
           description: Service is healthy
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                example: "OK"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
 
   /api/images/health:
     get:
       summary: Detailed health check
-      description: Returns detailed health information including S3 bucket status
+      description: Returns detailed health information including storage and configuration status
+      tags:
+        - Health
       responses:
         '200':
           description: Detailed health status
@@ -57,14 +72,20 @@ paths:
                   service:
                     type: string
                     example: "image-service"
-                  s3_bucket:
+                  storage_path:
                     type: string
-                    example: "gara-images"
+                    example: "./data/images"
 
   /api/images/upload:
     post:
       summary: Upload an image
-      description: Upload an image file to S3. Returns a unique image ID for retrieval and transformation. Requires API key authentication.
+      description: |
+        Upload an image file to local storage. Returns a unique image ID for retrieval
+        and transformation. Requires API key authentication.
+
+        **Image metadata** (name, dimensions, format) is automatically stored in the database.
+      tags:
+        - Images
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -107,49 +128,71 @@ paths:
                     type: string
                     example: "Image uploaded successfully"
         '401':
-          description: Unauthorized (missing or invalid API key)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              examples:
-                missing_key:
-                  value:
-                    error: "Unauthorized"
-                    message: "Missing X-API-Key header"
-                invalid_key:
-                  value:
-                    error: "Unauthorized"
-                    message: "Invalid API key"
+          $ref: '#/components/responses/UnauthorizedError'
         '400':
           description: Invalid request (no file, invalid format)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                error: "Failed to extract file from request"
-                message: "Please upload a valid image file"
         '413':
           description: File too large
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                error: "File too large"
-                message: "Maximum file size is 100MB"
         '500':
-          description: Internal server error
+          $ref: '#/components/responses/InternalError'
+
+  /api/images:
+    get:
+      summary: List all uploaded images
+      description: |
+        Retrieve a paginated list of all uploaded images with their metadata.
+        This endpoint is required for the gallery view to display available images.
+        Returns image IDs, and metadata for all images in the system.
+      operationId: listImages
+      tags:
+        - Images
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: List of images retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageListResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/ImageListSuccess'
+                empty:
+                  $ref: '#/components/examples/ImageListEmpty'
+        '400':
+          description: Invalid request parameters
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: "Invalid limit parameter: must be between 1 and 1000"
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/images/{image_id}:
     get:
       summary: Get or transform an image
-      description: Retrieve an image by ID with optional transformations. Returns a presigned S3 URL.
+      description: |
+        Retrieve an image by ID with optional transformations. Returns a presigned URL
+        (or file:// URL for local mode) to access the image.
+
+        **Transformations**: Format conversion, resizing (with aspect ratio preservation)
+        **Watermarking**: Automatically applied if enabled
+        **Caching**: Transformed images are cached for faster subsequent requests
+      tags:
+        - Images
       parameters:
         - name: image_id
           in: path
@@ -210,8 +253,8 @@ paths:
                   url:
                     type: string
                     format: uri
-                    description: Presigned S3 URL (valid for 1 hour)
-                    example: "https://gara-images.s3.amazonaws.com/transformed/...?X-Amz-Signature=..."
+                    description: URL to access the image (file:// for local mode)
+                    example: "file:///data/images/transformed/a3b5c7d9...png"
                   expires_in:
                     type: integer
                     description: URL expiration time in seconds
@@ -230,11 +273,270 @@ paths:
                     type: string
                     example: "invalid_id"
         '500':
-          description: Internal server error
+          $ref: '#/components/responses/InternalError'
+
+  /api/albums:
+    get:
+      summary: List all albums
+      description: Retrieve all albums, optionally filtered by published status
+      tags:
+        - Albums
+      parameters:
+        - name: published_only
+          in: query
+          required: false
+          description: If true, only return published albums
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of albums
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  albums:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Album'
+                  count:
+                    type: integer
+                    example: 5
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      summary: Create a new album
+      description: Create a new album. Requires API key authentication.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlbumRequest'
+      responses:
+        '201':
+          description: Album created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          description: Invalid request (missing required fields, duplicate name)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/albums/{album_id}:
+    get:
+      summary: Get album by ID
+      description: Retrieve a single album with all its details and image references
+      tags:
+        - Albums
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+      responses:
+        '200':
+          description: Album found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      summary: Update an album
+      description: Update album details. Requires API key authentication.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlbumRequest'
+      responses:
+        '200':
+          description: Album updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      summary: Delete an album
+      description: Delete an album. Requires API key authentication. Images are not deleted.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+      responses:
+        '204':
+          description: Album deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/albums/{album_id}/images:
+    post:
+      summary: Add images to album
+      description: Add one or more images to an album at a specific position. Requires API key authentication.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddImagesRequest'
+      responses:
+        '200':
+          description: Images added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/albums/{album_id}/images/{image_id}:
+    delete:
+      summary: Remove image from album
+      description: Remove a specific image from an album. Requires API key authentication.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+        - name: image_id
+          in: path
+          required: true
+          description: The image ID to remove
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Album or image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/albums/{album_id}/reorder:
+    put:
+      summary: Reorder images in album
+      description: Set a new order for all images in the album. Requires API key authentication.
+      tags:
+        - Albums
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AlbumIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderImagesRequest'
+      responses:
+        '200':
+          description: Images reordered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -242,7 +544,51 @@ components:
       type: apiKey
       in: header
       name: X-API-Key
-      description: API key for authenticating upload requests. Obtain this key from AWS Secrets Manager (secret name configured via SECRETS_MANAGER_API_KEY_NAME environment variable).
+      description: API key for authenticating write operations. Set via API_KEY environment variable.
+
+  parameters:
+    AlbumIdParam:
+      name: album_id
+      in: path
+      required: true
+      description: The unique album ID
+      schema:
+        type: string
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of items to return (pagination)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+      example: 50
+
+    OffsetParam:
+      name: offset
+      in: query
+      required: false
+      description: Number of items to skip (pagination)
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      example: 0
+
+    SortParam:
+      name: sort
+      in: query
+      required: false
+      description: Sort order for results
+      schema:
+        type: string
+        enum: [newest, oldest, name_asc, name_desc]
+        default: newest
+      example: newest
 
   schemas:
     Error:
@@ -250,16 +596,262 @@ components:
       properties:
         error:
           type: string
-          description: Error type
-        message:
-          type: string
-          description: Human-readable error message
+          description: Error message
       required:
         - error
-        - message
+
+    ImageMetadata:
+      type: object
+      required:
+        - id
+        - name
+        - uploadedAt
+      properties:
+        id:
+          type: string
+          description: The unique image ID (SHA256 hash)
+          pattern: '^[a-f0-9]{64}$'
+          example: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+        name:
+          type: string
+          description: Original filename without extension
+          example: "sunset-beach"
+        uploadedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the image was uploaded
+          example: "2025-11-17T14:30:00.000Z"
+        size:
+          type: integer
+          format: int64
+          description: File size in bytes
+          minimum: 1
+          example: 2458624
+        format:
+          type: string
+          description: Original image format
+          enum: [jpeg, jpg, png, gif, tiff, webp]
+          example: "jpeg"
+        width:
+          type: integer
+          description: Original image width in pixels
+          minimum: 1
+          example: 1920
+        height:
+          type: integer
+          description: Original image height in pixels
+          minimum: 1
+          example: 1080
+
+    ImageListResponse:
+      type: object
+      required:
+        - images
+        - total
+        - limit
+        - offset
+      properties:
+        images:
+          type: array
+          description: Array of image metadata objects
+          items:
+            $ref: '#/components/schemas/ImageMetadata'
+        total:
+          type: integer
+          description: Total number of images available (for pagination)
+          example: 247
+        limit:
+          type: integer
+          description: Maximum results returned in this response
+          example: 100
+        offset:
+          type: integer
+          description: Number of results skipped
+          example: 0
+
+    Album:
+      type: object
+      required:
+        - album_id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        album_id:
+          type: string
+          description: Unique album identifier (UUID)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Album name (must be unique)
+          example: "Summer Vacation 2025"
+        description:
+          type: string
+          description: Album description
+          example: "Photos from our summer trip to the beach"
+        cover_image_id:
+          type: string
+          description: SHA256 hash of the cover image
+          example: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+        image_ids:
+          type: array
+          description: Ordered list of image IDs in this album
+          items:
+            type: string
+          example: ["a3b5c7d9...", "b4c6d8e0..."]
+        tags:
+          type: array
+          description: Tags for categorization
+          items:
+            type: string
+          example: ["vacation", "beach", "summer"]
+        published:
+          type: boolean
+          description: Whether the album is published
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Album creation timestamp
+          example: "2025-11-01T10:00:00.000Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-11-17T15:30:00.000Z"
+
+    CreateAlbumRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Album name (must be unique)
+          example: "Summer Vacation 2025"
+        description:
+          type: string
+          description: Album description
+          example: "Photos from our summer trip"
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["vacation", "summer"]
+        published:
+          type: boolean
+          default: false
+          example: false
+
+    UpdateAlbumRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: New album name (must be unique)
+          example: "Summer Vacation 2025 (Updated)"
+        description:
+          type: string
+          description: New description
+          example: "Updated description"
+        cover_image_id:
+          type: string
+          description: Set the cover image
+          example: "a3b5c7d9..."
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["vacation", "beach"]
+        published:
+          type: boolean
+          example: true
+
+    AddImagesRequest:
+      type: object
+      required:
+        - image_ids
+      properties:
+        image_ids:
+          type: array
+          description: List of image IDs to add
+          items:
+            type: string
+          example: ["a3b5c7d9...", "b4c6d8e0..."]
+        position:
+          type: integer
+          description: Position to insert images (-1 for append)
+          default: -1
+          example: 0
+
+    ReorderImagesRequest:
+      type: object
+      required:
+        - image_ids
+      properties:
+        image_ids:
+          type: array
+          description: Complete new ordered list of all image IDs
+          items:
+            type: string
+          example: ["b4c6d8e0...", "a3b5c7d9..."]
+
+  responses:
+    UnauthorizedError:
+      description: Unauthorized (missing or invalid API key)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Missing X-API-Key header"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+
+  examples:
+    ImageListSuccess:
+      summary: Successful response with two images
+      value:
+        images:
+          - id: "a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4"
+            name: "sunset-beach"
+            uploadedAt: "2025-11-17T14:30:00.000Z"
+            size: 2458624
+            format: "jpeg"
+            width: 1920
+            height: 1080
+          - id: "b4c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6"
+            name: "mountain-landscape"
+            uploadedAt: "2025-11-17T15:45:00.000Z"
+            size: 3145728
+            format: "png"
+            width: 2560
+            height: 1440
+        total: 247
+        limit: 100
+        offset: 0
+
+    ImageListEmpty:
+      summary: Empty response when no images exist
+      value:
+        images: []
+        total: 0
+        limit: 100
+        offset: 0
 
 tags:
-  - name: Images
-    description: Image upload and transformation operations
+  - name: General
+    description: General service information
   - name: Health
     description: Service health checks
+  - name: Images
+    description: Image upload, transformation, and listing operations
+  - name: Albums
+    description: Album management operations

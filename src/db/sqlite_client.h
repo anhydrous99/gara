@@ -37,6 +37,14 @@ public:
     bool albumNameExists(const std::string& name,
                         const std::string& exclude_album_id = "") override;
 
+    // Image metadata operations
+    bool putImageMetadata(const ImageMetadata& metadata) override;
+    std::optional<ImageMetadata> getImageMetadata(const std::string& image_id) override;
+    std::vector<ImageMetadata> listImages(int limit, int offset,
+                                          ImageSortOrder sort_order) override;
+    int getImageCount() override;
+    bool imageExists(const std::string& image_id) override;
+
     /**
      * @brief Initialize the database schema
      * @return true if successful
@@ -69,6 +77,16 @@ private:
      * @brief Helper to extract Album from SQLite row
      */
     Album extractAlbum(sqlite3_stmt* stmt);
+
+    /**
+     * @brief Helper to extract ImageMetadata from SQLite row
+     */
+    ImageMetadata extractImageMetadata(sqlite3_stmt* stmt);
+
+    /**
+     * @brief Convert ImageSortOrder to SQL ORDER BY clause
+     */
+    std::string getSortOrderSql(ImageSortOrder sort_order);
 };
 
 } // namespace gara
