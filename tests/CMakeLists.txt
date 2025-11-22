@@ -1,5 +1,5 @@
 # Test executable
-add_executable(gara_tests
+set(TEST_SOURCES
     utils/file_utils_test.cpp
     utils/id_generator_test.cpp
     services/image_processor_test.cpp
@@ -11,7 +11,10 @@ add_executable(gara_tests
     controllers/album_controller_test.cpp
     error_handling_test.cpp
     integration_test.cpp
+    db/mysql_client_test.cpp
 )
+
+add_executable(gara_tests ${TEST_SOURCES})
 
 target_include_directories(gara_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
