@@ -37,10 +37,17 @@ if(ENABLE_MYSQL)
     pkg_check_modules(MYSQL mysqlclient)
     if(MYSQL_FOUND)
         message(STATUS "MySQL support enabled via pkg-config")
-        message(STATUS "  MYSQL_INCLUDE_DIRS: ${MYSQL_INCLUDE_DIRS}")
+        message(STATUS "  MYSQL_INCLUDE_DIRS (raw): ${MYSQL_INCLUDE_DIRS}")
         message(STATUS "  MYSQL_LIBRARY_DIRS: ${MYSQL_LIBRARY_DIRS}")
         message(STATUS "  MYSQL_LIBRARIES: ${MYSQL_LIBRARIES}")
         message(STATUS "  MYSQL_CFLAGS: ${MYSQL_CFLAGS}")
+
+        # Fix: pkg-config may return path ending in /mysql, but we need parent dir
+        # since we #include <mysql/mysql.h>
+        if(MYSQL_INCLUDE_DIRS)
+            string(REGEX REPLACE "/mysql$" "" MYSQL_INCLUDE_DIRS "${MYSQL_INCLUDE_DIRS}")
+            message(STATUS "  MYSQL_INCLUDE_DIRS (fixed): ${MYSQL_INCLUDE_DIRS}")
+        endif()
 
         # On macOS, MYSQL_INCLUDE_DIRS may be empty, use MYSQL_INCLUDE_DIR if provided
         if(NOT MYSQL_INCLUDE_DIRS)
