@@ -37,6 +37,10 @@ if(ENABLE_MYSQL)
     pkg_check_modules(MYSQL mysqlclient)
     if(MYSQL_FOUND)
         message(STATUS "MySQL support enabled")
+        message(STATUS "  MYSQL_INCLUDE_DIRS: ${MYSQL_INCLUDE_DIRS}")
+        message(STATUS "  MYSQL_LIBRARY_DIRS: ${MYSQL_LIBRARY_DIRS}")
+        message(STATUS "  MYSQL_LIBRARIES: ${MYSQL_LIBRARIES}")
+        message(STATUS "  MYSQL_CFLAGS: ${MYSQL_CFLAGS}")
         add_definitions(-DGARA_MYSQL_SUPPORT)
     else()
         message(WARNING "MySQL client library not found, MySQL support disabled")
@@ -135,8 +139,17 @@ target_include_directories(gara_lib PUBLIC
 
 # Add MySQL include directories if available
 if(ENABLE_MYSQL AND MYSQL_FOUND)
-    target_include_directories(gara_lib PUBLIC ${MYSQL_INCLUDE_DIRS})
-    target_link_directories(gara_lib PUBLIC ${MYSQL_LIBRARY_DIRS})
+    # Use MYSQL_INCLUDE_DIRS if available, otherwise parse from CFLAGS
+    if(MYSQL_INCLUDE_DIRS)
+        target_include_directories(gara_lib PUBLIC ${MYSQL_INCLUDE_DIRS})
+    endif()
+    if(MYSQL_LIBRARY_DIRS)
+        target_link_directories(gara_lib PUBLIC ${MYSQL_LIBRARY_DIRS})
+    endif()
+    # Add any additional compile flags from pkg-config
+    if(MYSQL_CFLAGS)
+        target_compile_options(gara_lib PUBLIC ${MYSQL_CFLAGS})
+    endif()
 endif()
 
 target_link_directories(gara_lib PUBLIC
