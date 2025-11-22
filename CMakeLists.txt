@@ -30,6 +30,19 @@ find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(PkgConfig REQUIRED)
+
+# MySQL support (optional)
+option(ENABLE_MYSQL "Enable MySQL database support" ON)
+if(ENABLE_MYSQL)
+    pkg_check_modules(MYSQL mysqlclient)
+    if(MYSQL_FOUND)
+        message(STATUS "MySQL support enabled")
+        add_definitions(-DGARA_MYSQL_SUPPORT)
+    else()
+        message(WARNING "MySQL client library not found, MySQL support disabled")
+        set(ENABLE_MYSQL OFF)
+    endif()
+endif()
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(VIPS REQUIRED vips-cpp)
@@ -88,7 +101,7 @@ add_library(vips-cpp INTERFACE)
 target_link_libraries(vips-cpp INTERFACE vips)
 
 # Library with shared code (for both main app and tests)
-add_library(gara_lib
+set(GARA_LIB_SOURCES
     src/models/image_metadata.cpp
     src/models/album.cpp
     src/utils/file_utils.cpp
@@ -107,19 +120,31 @@ add_library(gara_lib
     src/controllers/album_controller.cpp
 )
 
+# Add MySQL client source if MySQL support is enabled
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    list(APPEND GARA_LIB_SOURCES src/db/mysql_client.cpp)
+endif()
+
+add_library(gara_lib ${GARA_LIB_SOURCES})
+
 target_include_directories(gara_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLIB_INCLUDE_DIRS}
     ${GOBJECT_INCLUDE_DIRS}
 )
 
+# Add MySQL include directories if available
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    target_include_directories(gara_lib PUBLIC ${MYSQL_INCLUDE_DIRS})
+    target_link_directories(gara_lib PUBLIC ${MYSQL_LIBRARY_DIRS})
+endif()
+
 target_link_directories(gara_lib PUBLIC
     ${GLIB_LIBRARY_DIRS}
     ${GOBJECT_LIBRARY_DIRS}
 )
 
-target_link_libraries(gara_lib
-    PUBLIC
+set(GARA_LINK_LIBRARIES
     OpenSSL::SSL
     OpenSSL::Crypto
     ZLIB::ZLIB
@@ -132,6 +157,13 @@ target_link_libraries(gara_lib
     ${GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
 )
+
+# Add MySQL libraries if available
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    list(APPEND GARA_LINK_LIBRARIES ${MYSQL_LIBRARIES})
+endif()
+
+target_link_libraries(gara_lib PUBLIC ${GARA_LINK_LIBRARIES})
 
 # Main executable
 add_executable(gara-image src/main.cpp)

@@ -12,7 +12,11 @@
 #include "services/local_config_service.h"
 #include "services/watermark_service.h"
 #include "services/album_service.h"
+#include "interfaces/database_client_interface.h"
 #include "db/sqlite_client.h"
+#ifdef GARA_MYSQL_SUPPORT
+#include "db/mysql_client.h"
+#endif
 #include "controllers/image_controller.h"
 #include "controllers/album_controller.h"
 #include "models/watermark_config.h"
@@ -56,16 +60,19 @@ int main() {
 
     // Get configuration from environment
     const char* storage_path_env = std::getenv("STORAGE_PATH");
+    const char* db_type_env = std::getenv("DATABASE_TYPE");
     const char* db_path_env = std::getenv("DATABASE_PATH");
     const char* api_key_env_var = std::getenv("API_KEY_ENV_VAR");
 
     std::string storage_path = storage_path_env ? storage_path_env : "./data/images";
+    std::string db_type = db_type_env ? db_type_env : "sqlite";
     std::string db_path = db_path_env ? db_path_env : "./data/gara.db";
     std::string api_key_var = api_key_env_var ? api_key_env_var : "API_KEY";
 
     LOG_INFO("Starting Gara Image Service (Local Mode)");
     gara::Logger::log_structured(spdlog::level::info, "Service configuration", {
         {"storage_path", storage_path},
+        {"database_type", db_type},
         {"database_path", db_path},
         {"api_key_env_var", api_key_var},
         {"mode", "local"}
@@ -74,22 +81,48 @@ int main() {
     // Create data directories if they don't exist
     try {
         std::filesystem::create_directories(storage_path);
-        std::filesystem::create_directories(std::filesystem::path(db_path).parent_path());
+        if (db_type == "sqlite") {
+            std::filesystem::create_directories(std::filesystem::path(db_path).parent_path());
+        }
         LOG_INFO("Data directories created/verified");
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to create data directories: " + std::string(e.what()));
         return 1;
     }
 
-    // Initialize SQLite database
-    std::shared_ptr<gara::SQLiteClient> db_client;
+    // Initialize database based on DATABASE_TYPE
+    std::shared_ptr<gara::DatabaseClientInterface> db_client;
     try {
-        db_client = std::make_shared<gara::SQLiteClient>(db_path);
-        if (!db_client->initialize()) {
-            LOG_CRITICAL("Failed to initialize database schema");
+        if (db_type == "mysql") {
+#ifdef GARA_MYSQL_SUPPORT
+            auto mysql_config = gara::MySQLConfig::fromEnvironment();
+            gara::Logger::log_structured(spdlog::level::info, "MySQL configuration", {
+                {"host", mysql_config.host},
+                {"port", mysql_config.port},
+                {"user", mysql_config.user},
+                {"database", mysql_config.database}
+            });
+            auto mysql_client = std::make_shared<gara::MySQLClient>(mysql_config);
+            if (!mysql_client->initialize()) {
+                LOG_CRITICAL("Failed to initialize MySQL database schema");
+                return 1;
+            }
+            db_client = mysql_client;
+            LOG_INFO("MySQL database initialized successfully");
+#else
+            LOG_CRITICAL("MySQL support not compiled in. Rebuild with ENABLE_MYSQL=ON");
             return 1;
+#endif
+        } else {
+            // Default to SQLite
+            auto sqlite_client = std::make_shared<gara::SQLiteClient>(db_path);
+            if (!sqlite_client->initialize()) {
+                LOG_CRITICAL("Failed to initialize SQLite database schema");
+                return 1;
+            }
+            db_client = sqlite_client;
+            LOG_INFO("SQLite database initialized successfully");
         }
-        LOG_INFO("Database initialized successfully");
     } catch (const std::exception& e) {
         LOG_CRITICAL("Failed to open database: " + std::string(e.what()));
         return 1;
