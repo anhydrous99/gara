@@ -190,8 +190,7 @@ jobs:
       with:
         path: |
           ~/Library/Caches/Homebrew
-          /usr/local/Cellar
-        key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/test.yml') }}
+        key: ${{ runner.os }}-brew-v2
         restore-keys: |
           ${{ runner.os }}-brew-
 
@@ -201,8 +200,9 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'tests/**') }}
+        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt') }}-${{ github.sha }}
         restore-keys: |
+          ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt') }}-
           ${{ runner.os }}-build-
 
     - name: Install dependencies
