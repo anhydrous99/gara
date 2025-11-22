@@ -188,11 +188,9 @@ jobs:
     - name: Cache Homebrew packages
       uses: actions/cache@v4
       with:
-        path: |
-          ~/Library/Caches/Homebrew
-        key: ${{ runner.os }}-brew-v2
-        restore-keys: |
-          ${{ runner.os }}-brew-
+        path: ~/Library/Caches/Homebrew
+        key: ${{ runner.os }}-brew-v3
+        restore-keys: ${{ runner.os }}-brew-
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -200,10 +198,8 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-v2-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-build-v2-
-          ${{ runner.os }}-build-
+        key: ${{ runner.os }}-cmake-v3-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-cmake-v3-
 
     - name: Install dependencies
       run: |
