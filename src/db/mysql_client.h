@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <functional>
 #include "../interfaces/database_client_interface.h"
 
 namespace gara {
@@ -19,10 +20,28 @@ struct MySQLConfig {
     std::string password;
     std::string database = "gara";
 
-    /**
-     * @brief Create config from environment variables
-     */
     static MySQLConfig fromEnvironment();
+};
+
+/**
+ * @brief RAII wrapper for MySQL result sets
+ */
+class MySQLResult {
+public:
+    explicit MySQLResult(MYSQL_RES* result) : result_(result) {}
+    ~MySQLResult() { if (result_) mysql_free_result(result_); }
+
+    MySQLResult(const MySQLResult&) = delete;
+    MySQLResult& operator=(const MySQLResult&) = delete;
+
+    MYSQL_RES* get() const { return result_; }
+    explicit operator bool() const { return result_ != nullptr; }
+
+    MYSQL_ROW fetchRow() { return mysql_fetch_row(result_); }
+    unsigned long* fetchLengths() { return mysql_fetch_lengths(result_); }
+
+private:
+    MYSQL_RES* result_;
 };
 
 /**
@@ -30,18 +49,9 @@ struct MySQLConfig {
  */
 class MySQLClient : public DatabaseClientInterface {
 public:
-    /**
-     * @brief Constructor
-     * @param config MySQL connection configuration
-     */
     explicit MySQLClient(const MySQLConfig& config);
-
-    /**
-     * @brief Destructor - closes database connection
-     */
     ~MySQLClient() override;
 
-    // Disable copy
     MySQLClient(const MySQLClient&) = delete;
     MySQLClient& operator=(const MySQLClient&) = delete;
 
@@ -53,7 +63,6 @@ public:
     bool albumNameExists(const std::string& name,
                         const std::string& exclude_album_id = "") override;
 
-    // Image metadata operations
     bool putImageMetadata(const ImageMetadata& metadata) override;
     std::optional<ImageMetadata> getImageMetadata(const std::string& image_id) override;
     std::vector<ImageMetadata> listImages(int limit, int offset,
@@ -61,70 +70,65 @@ public:
     int getImageCount() override;
     bool imageExists(const std::string& image_id) override;
 
-    /**
-     * @brief Initialize the database schema
-     * @return true if successful
-     */
     bool initialize();
-
-    /**
-     * @brief Check if connected to the database
-     * @return true if connected
-     */
     bool isConnected() const;
 
 private:
     MYSQL* conn_;
     MySQLConfig config_;
-    mutable std::mutex db_mutex_;  // For thread safety
+    mutable std::mutex db_mutex_;
 
-    /**
-     * @brief Execute SQL statement
-     * @param sql SQL statement to execute
-     * @return true if successful
-     */
-    bool executeSql(const std::string& sql);
+    // Column indices for albums table
+    struct AlbumColumns {
+        static constexpr int ID = 0;
+        static constexpr int NAME = 1;
+        static constexpr int DESCRIPTION = 2;
+        static constexpr int COVER_IMAGE_ID = 3;
+        static constexpr int IMAGE_IDS = 4;
+        static constexpr int TAGS = 5;
+        static constexpr int PUBLISHED = 6;
+        static constexpr int CREATED_AT = 7;
+        static constexpr int UPDATED_AT = 8;
+    };
 
-    /**
-     * @brief Reconnect to the database if connection was lost
-     * @return true if reconnected successfully
-     */
+    // Column indices for images table
+    struct ImageColumns {
+        static constexpr int ID = 0;
+        static constexpr int NAME = 1;
+        static constexpr int FORMAT = 2;
+        static constexpr int SIZE = 3;
+        static constexpr int WIDTH = 4;
+        static constexpr int HEIGHT = 5;
+        static constexpr int UPLOADED_AT = 6;
+    };
+
     bool reconnectIfNeeded();
-
-    /**
-     * @brief Helper to convert vector to JSON string for storage
-     */
-    std::string vectorToJson(const std::vector<std::string>& vec);
-
-    /**
-     * @brief Helper to convert JSON string back to vector
-     */
-    std::vector<std::string> jsonToVector(const std::string& json);
-
-    /**
-     * @brief Helper to extract Album from MySQL result row
-     */
-    Album extractAlbum(MYSQL_ROW row, unsigned long* lengths);
-
-    /**
-     * @brief Helper to extract ImageMetadata from MySQL result row
-     */
-    ImageMetadata extractImageMetadata(MYSQL_ROW row, unsigned long* lengths);
-
-    /**
-     * @brief Convert ImageSortOrder to SQL ORDER BY clause
-     */
-    std::string getSortOrderSql(ImageSortOrder sort_order);
-
-    /**
-     * @brief Escape string for MySQL queries
-     */
     std::string escapeString(const std::string& str);
 
-    /**
-     * @brief Get safe string from result, handling NULL values
-     */
-    std::string getSafeString(MYSQL_ROW row, int index, unsigned long* lengths);
+    // JSON helpers
+    static std::string vectorToJson(const std::vector<std::string>& vec);
+    static std::vector<std::string> jsonToVector(const std::string& json_str);
+
+    // Row extraction helpers
+    static std::string getSafeString(MYSQL_ROW row, int index, unsigned long* lengths);
+    Album extractAlbum(MYSQL_ROW row, unsigned long* lengths);
+    ImageMetadata extractImageMetadata(MYSQL_ROW row, unsigned long* lengths);
+
+    static std::string getSortOrderSql(ImageSortOrder sort_order);
+
+    // Query execution helpers
+    bool executeQuery(const std::string& sql);
+    MySQLResult executeSelect(const std::string& sql);
+
+    template<typename T>
+    std::optional<T> executeSingleRowQuery(
+        const std::string& sql,
+        std::function<T(MYSQL_ROW, unsigned long*)> extractor);
+
+    template<typename T>
+    std::vector<T> executeMultiRowQuery(
+        const std::string& sql,
+        std::function<T(MYSQL_ROW, unsigned long*)> extractor);
 };
 
 } // namespace gara
