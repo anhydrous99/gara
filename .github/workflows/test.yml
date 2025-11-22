@@ -200,9 +200,9 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt') }}-${{ github.sha }}
+        key: ${{ runner.os }}-build-v2-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt') }}-
+          ${{ runner.os }}-build-v2-
           ${{ runner.os }}-build-
 
     - name: Install dependencies
