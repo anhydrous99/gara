@@ -215,9 +215,12 @@ jobs:
         MYSQL_PREFIX="$(brew --prefix mysql-client)"
         export PKG_CONFIG_PATH="${MYSQL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
+        echo "=== MySQL Debug Info ==="
         echo "MySQL prefix: $MYSQL_PREFIX"
         echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-        ls -la "${MYSQL_PREFIX}/include/mysql/" | head -5 || echo "MySQL headers not found at expected location"
+        echo "Checking for mysql.h:"
+        find "$MYSQL_PREFIX" -name "mysql.h" 2>/dev/null || echo "mysql.h not found"
+        echo "========================"
 
         mkdir -p build
         cd build
@@ -225,8 +228,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Debug \
           -DENABLE_MYSQL=ON \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-          -DMYSQL_INCLUDE_DIR="${MYSQL_PREFIX}/include" \
-          -DCMAKE_INCLUDE_PATH="${MYSQL_PREFIX}/include"
+          -DMYSQL_INCLUDE_DIR="$MYSQL_PREFIX/include"
 
     - name: Verify MySQL support enabled
       run: |

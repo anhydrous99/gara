@@ -162,9 +162,13 @@ target_include_directories(gara_lib PUBLIC
 
 # Add MySQL include directories if available
 if(ENABLE_MYSQL AND MYSQL_FOUND)
-    # Use MYSQL_INCLUDE_DIRS if available, otherwise parse from CFLAGS
+    message(STATUS "Applying MySQL includes: MYSQL_INCLUDE_DIRS=${MYSQL_INCLUDE_DIRS}")
+    # Use MYSQL_INCLUDE_DIRS if available
     if(MYSQL_INCLUDE_DIRS)
+        # Use both global and target-specific includes to ensure visibility
+        include_directories(${MYSQL_INCLUDE_DIRS})
         target_include_directories(gara_lib PUBLIC ${MYSQL_INCLUDE_DIRS})
+        message(STATUS "Added MySQL include directory: ${MYSQL_INCLUDE_DIRS}")
     endif()
     if(MYSQL_LIBRARY_DIRS)
         target_link_directories(gara_lib PUBLIC ${MYSQL_LIBRARY_DIRS})
