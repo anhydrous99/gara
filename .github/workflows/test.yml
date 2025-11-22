@@ -79,8 +79,18 @@ jobs:
         cmake .. \
           -DCMAKE_BUILD_TYPE=Debug \
           -DENABLE_COVERAGE=ON \
+          -DENABLE_MYSQL=ON \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DBUILD_STATIC=OFF
+
+    - name: Verify MySQL support enabled
+      run: |
+        if grep -q "GARA_MYSQL_SUPPORT" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled"
+        else
+          echo "✗ MySQL support is NOT enabled"
+          exit 1
+        fi
 
     - name: Build
       run: |
@@ -208,7 +218,17 @@ jobs:
         cd build
         cmake .. \
           -DCMAKE_BUILD_TYPE=Debug \
+          -DENABLE_MYSQL=ON \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+    - name: Verify MySQL support enabled
+      run: |
+        if grep -q "GARA_MYSQL_SUPPORT" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled"
+        else
+          echo "✗ MySQL support is NOT enabled"
+          exit 1
+        fi
 
     - name: Build
       run: |
