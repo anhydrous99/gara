@@ -55,6 +55,8 @@ jobs:
           zlib1g-dev \
           libssl-dev \
           libcurl4-openssl-dev \
+          libsqlite3-dev \
+          libmysqlclient-dev \
           libvips-dev \
           libglib2.0-dev \
           ccache \
@@ -193,7 +195,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install openssl zlib cmake pkg-config glib vips ccache
+        brew install openssl zlib cmake pkg-config glib vips sqlite mysql-client ccache
 
     - name: Setup ccache
       run: |
