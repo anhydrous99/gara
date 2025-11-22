@@ -211,16 +211,22 @@ jobs:
 
     - name: Configure CMake
       run: |
-        # Add Homebrew mysql-client to PKG_CONFIG_PATH
-        export PKG_CONFIG_PATH="$(brew --prefix mysql-client)/lib/pkgconfig:$PKG_CONFIG_PATH"
-        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+        # Get Homebrew mysql-client paths
+        MYSQL_PREFIX="$(brew --prefix mysql-client)"
+        export PKG_CONFIG_PATH="${MYSQL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+        echo "MySQL prefix: $MYSQL_PREFIX"
+        echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+        ls -la "${MYSQL_PREFIX}/include/mysql/" | head -5 || echo "MySQL headers not found at expected location"
 
         mkdir -p build
         cd build
         cmake .. \
           -DCMAKE_BUILD_TYPE=Debug \
           -DENABLE_MYSQL=ON \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DMYSQL_INCLUDE_DIR="${MYSQL_PREFIX}/include" \
+          -DCMAKE_INCLUDE_PATH="${MYSQL_PREFIX}/include"
 
     - name: Verify MySQL support enabled
       run: |

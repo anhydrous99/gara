@@ -42,19 +42,25 @@ if(ENABLE_MYSQL)
         message(STATUS "  MYSQL_LIBRARIES: ${MYSQL_LIBRARIES}")
         message(STATUS "  MYSQL_CFLAGS: ${MYSQL_CFLAGS}")
 
-        # On macOS, MYSQL_INCLUDE_DIRS may be empty, try to find it manually
-        if(NOT MYSQL_INCLUDE_DIRS AND APPLE)
-            # Try Homebrew locations
-            find_path(MYSQL_INCLUDE_DIR mysql/mysql.h
-                HINTS
-                    /opt/homebrew/opt/mysql-client/include
-                    /usr/local/opt/mysql-client/include
-                    /opt/homebrew/include
-                    /usr/local/include
-            )
+        # On macOS, MYSQL_INCLUDE_DIRS may be empty, use MYSQL_INCLUDE_DIR if provided
+        if(NOT MYSQL_INCLUDE_DIRS)
             if(MYSQL_INCLUDE_DIR)
+                # Use the path passed from command line
                 set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR})
-                message(STATUS "  Found MySQL headers at: ${MYSQL_INCLUDE_DIRS}")
+                message(STATUS "  Using provided MYSQL_INCLUDE_DIR: ${MYSQL_INCLUDE_DIRS}")
+            elseif(APPLE)
+                # Try Homebrew locations
+                find_path(MYSQL_INCLUDE_DIR_FOUND mysql/mysql.h
+                    HINTS
+                        /opt/homebrew/opt/mysql-client/include
+                        /usr/local/opt/mysql-client/include
+                        /opt/homebrew/include
+                        /usr/local/include
+                )
+                if(MYSQL_INCLUDE_DIR_FOUND)
+                    set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR_FOUND})
+                    message(STATUS "  Found MySQL headers at: ${MYSQL_INCLUDE_DIRS}")
+                endif()
             endif()
         endif()
 
