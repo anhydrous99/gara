@@ -85,10 +85,12 @@ jobs:
 
     - name: Verify MySQL support enabled
       run: |
-        if grep -q "GARA_MYSQL_SUPPORT" build/CMakeCache.txt; then
-          echo "✓ MySQL support is enabled"
+        if grep -q "MYSQL_FOUND:INTERNAL=1" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled (MYSQL_FOUND=1)"
         else
           echo "✗ MySQL support is NOT enabled"
+          echo "CMake cache MYSQL entries:"
+          grep -i "MYSQL" build/CMakeCache.txt || echo "No MYSQL entries found"
           exit 1
         fi
 
@@ -223,10 +225,12 @@ jobs:
 
     - name: Verify MySQL support enabled
       run: |
-        if grep -q "GARA_MYSQL_SUPPORT" build/CMakeCache.txt; then
-          echo "✓ MySQL support is enabled"
+        if grep -q "MYSQL_FOUND:INTERNAL=1" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled (MYSQL_FOUND=1)"
         else
           echo "✗ MySQL support is NOT enabled"
+          echo "CMake cache MYSQL entries:"
+          grep -i "MYSQL" build/CMakeCache.txt || echo "No MYSQL entries found"
           exit 1
         fi
 
