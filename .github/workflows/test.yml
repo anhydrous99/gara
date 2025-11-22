@@ -1,4 +1,5 @@
 name: Tests
+# Build and test on Ubuntu and macOS
 
 on:
   push:
@@ -30,9 +31,8 @@ jobs:
       uses: actions/cache@v4
       with:
         path: /var/cache/apt/archives
-        key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/test.yml') }}
-        restore-keys: |
-          ${{ runner.os }}-apt-
+        key: ${{ runner.os }}-apt-v3
+        restore-keys: ${{ runner.os }}-apt-
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -40,9 +40,8 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'tests/**') }}
-        restore-keys: |
-          ${{ runner.os }}-build-
+        key: ${{ runner.os }}-cmake-v3-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-cmake-v3-
 
     - name: Install dependencies
       run: |
@@ -55,6 +54,8 @@ jobs:
           zlib1g-dev \
           libssl-dev \
           libcurl4-openssl-dev \
+          libsqlite3-dev \
+          libmysqlclient-dev \
           libvips-dev \
           libglib2.0-dev \
           ccache \
@@ -77,8 +78,20 @@ jobs:
         cmake .. \
           -DCMAKE_BUILD_TYPE=Debug \
           -DENABLE_COVERAGE=ON \
+          -DENABLE_MYSQL=ON \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DBUILD_STATIC=OFF
+
+    - name: Verify MySQL support enabled
+      run: |
+        if grep -q "MYSQL_FOUND:INTERNAL=1" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled (MYSQL_FOUND=1)"
+        else
+          echo "✗ MySQL support is NOT enabled"
+          echo "CMake cache MYSQL entries:"
+          grep -i "MYSQL" build/CMakeCache.txt || echo "No MYSQL entries found"
+          exit 1
+        fi
 
     - name: Build
       run: |
@@ -174,12 +187,9 @@ jobs:
     - name: Cache Homebrew packages
       uses: actions/cache@v4
       with:
-        path: |
-          ~/Library/Caches/Homebrew
-          /usr/local/Cellar
-        key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/test.yml') }}
-        restore-keys: |
-          ${{ runner.os }}-brew-
+        path: ~/Library/Caches/Homebrew
+        key: ${{ runner.os }}-brew-v3
+        restore-keys: ${{ runner.os }}-brew-
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -187,13 +197,12 @@ jobs:
         path: |
           build
           ~/.ccache
-        key: ${{ runner.os }}-build-${{ hashFiles('**/CMakeLists.txt', 'src/**', 'include/**', 'tests/**') }}
-        restore-keys: |
-          ${{ runner.os }}-build-
+        key: ${{ runner.os }}-cmake-v3-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-cmake-v3-
 
     - name: Install dependencies
       run: |
-        brew install openssl zlib cmake pkg-config glib vips ccache
+        brew install openssl zlib cmake pkg-config glib vips sqlite mysql-client ccache
 
     - name: Setup ccache
       run: |
@@ -202,11 +211,35 @@ jobs:
 
     - name: Configure CMake
       run: |
+        # Get Homebrew mysql-client paths
+        MYSQL_PREFIX="$(brew --prefix mysql-client)"
+        export PKG_CONFIG_PATH="${MYSQL_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH"
+
+        echo "=== MySQL Debug Info ==="
+        echo "MySQL prefix: $MYSQL_PREFIX"
+        echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+        echo "Checking for mysql.h:"
+        find "$MYSQL_PREFIX" -name "mysql.h" 2>/dev/null || echo "mysql.h not found"
+        echo "========================"
+
         mkdir -p build
         cd build
         cmake .. \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DENABLE_MYSQL=ON \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DMYSQL_INCLUDE_DIR="$MYSQL_PREFIX/include"
+
+    - name: Verify MySQL support enabled
+      run: |
+        if grep -q "MYSQL_FOUND:INTERNAL=1" build/CMakeCache.txt; then
+          echo "✓ MySQL support is enabled (MYSQL_FOUND=1)"
+        else
+          echo "✗ MySQL support is NOT enabled"
+          echo "CMake cache MYSQL entries:"
+          grep -i "MYSQL" build/CMakeCache.txt || echo "No MYSQL entries found"
+          exit 1
+        fi
 
     - name: Build
       run: |

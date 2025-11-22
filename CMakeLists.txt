@@ -30,6 +30,53 @@ find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(PkgConfig REQUIRED)
+
+# MySQL support (optional)
+option(ENABLE_MYSQL "Enable MySQL database support" ON)
+if(ENABLE_MYSQL)
+    pkg_check_modules(MYSQL mysqlclient)
+    if(MYSQL_FOUND)
+        message(STATUS "MySQL support enabled via pkg-config")
+        message(STATUS "  MYSQL_INCLUDE_DIRS (raw): ${MYSQL_INCLUDE_DIRS}")
+        message(STATUS "  MYSQL_LIBRARY_DIRS: ${MYSQL_LIBRARY_DIRS}")
+        message(STATUS "  MYSQL_LIBRARIES: ${MYSQL_LIBRARIES}")
+        message(STATUS "  MYSQL_CFLAGS: ${MYSQL_CFLAGS}")
+
+        # Fix: pkg-config may return path ending in /mysql, but we need parent dir
+        # since we #include <mysql/mysql.h>
+        if(MYSQL_INCLUDE_DIRS)
+            string(REGEX REPLACE "/mysql$" "" MYSQL_INCLUDE_DIRS "${MYSQL_INCLUDE_DIRS}")
+            message(STATUS "  MYSQL_INCLUDE_DIRS (fixed): ${MYSQL_INCLUDE_DIRS}")
+        endif()
+
+        # On macOS, MYSQL_INCLUDE_DIRS may be empty, use MYSQL_INCLUDE_DIR if provided
+        if(NOT MYSQL_INCLUDE_DIRS)
+            if(MYSQL_INCLUDE_DIR)
+                # Use the path passed from command line
+                set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR})
+                message(STATUS "  Using provided MYSQL_INCLUDE_DIR: ${MYSQL_INCLUDE_DIRS}")
+            elseif(APPLE)
+                # Try Homebrew locations
+                find_path(MYSQL_INCLUDE_DIR_FOUND mysql/mysql.h
+                    HINTS
+                        /opt/homebrew/opt/mysql-client/include
+                        /usr/local/opt/mysql-client/include
+                        /opt/homebrew/include
+                        /usr/local/include
+                )
+                if(MYSQL_INCLUDE_DIR_FOUND)
+                    set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR_FOUND})
+                    message(STATUS "  Found MySQL headers at: ${MYSQL_INCLUDE_DIRS}")
+                endif()
+            endif()
+        endif()
+
+        add_definitions(-DGARA_MYSQL_SUPPORT)
+    else()
+        message(WARNING "MySQL client library not found, MySQL support disabled")
+        set(ENABLE_MYSQL OFF)
+    endif()
+endif()
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(VIPS REQUIRED vips-cpp)
@@ -88,7 +135,7 @@ add_library(vips-cpp INTERFACE)
 target_link_libraries(vips-cpp INTERFACE vips)
 
 # Library with shared code (for both main app and tests)
-add_library(gara_lib
+set(GARA_LIB_SOURCES
     src/models/image_metadata.cpp
     src/models/album.cpp
     src/utils/file_utils.cpp
@@ -107,19 +154,44 @@ add_library(gara_lib
     src/controllers/album_controller.cpp
 )
 
+# Add MySQL client source if MySQL support is enabled
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    list(APPEND GARA_LIB_SOURCES src/db/mysql_client.cpp)
+endif()
+
+add_library(gara_lib ${GARA_LIB_SOURCES})
+
 target_include_directories(gara_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${GLIB_INCLUDE_DIRS}
     ${GOBJECT_INCLUDE_DIRS}
 )
 
+# Add MySQL include directories if available
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    message(STATUS "Applying MySQL includes: MYSQL_INCLUDE_DIRS=${MYSQL_INCLUDE_DIRS}")
+    # Use MYSQL_INCLUDE_DIRS if available
+    if(MYSQL_INCLUDE_DIRS)
+        # Use both global and target-specific includes to ensure visibility
+        include_directories(${MYSQL_INCLUDE_DIRS})
+        target_include_directories(gara_lib PUBLIC ${MYSQL_INCLUDE_DIRS})
+        message(STATUS "Added MySQL include directory: ${MYSQL_INCLUDE_DIRS}")
+    endif()
+    if(MYSQL_LIBRARY_DIRS)
+        target_link_directories(gara_lib PUBLIC ${MYSQL_LIBRARY_DIRS})
+    endif()
+    # Add any additional compile flags from pkg-config
+    if(MYSQL_CFLAGS)
+        target_compile_options(gara_lib PUBLIC ${MYSQL_CFLAGS})
+    endif()
+endif()
+
 target_link_directories(gara_lib PUBLIC
     ${GLIB_LIBRARY_DIRS}
     ${GOBJECT_LIBRARY_DIRS}
 )
 
-target_link_libraries(gara_lib
-    PUBLIC
+set(GARA_LINK_LIBRARIES
     OpenSSL::SSL
     OpenSSL::Crypto
     ZLIB::ZLIB
@@ -132,6 +204,13 @@ target_link_libraries(gara_lib
     ${GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
 )
+
+# Add MySQL libraries if available
+if(ENABLE_MYSQL AND MYSQL_FOUND)
+    list(APPEND GARA_LINK_LIBRARIES ${MYSQL_LIBRARIES})
+endif()
+
+target_link_libraries(gara_lib PUBLIC ${GARA_LINK_LIBRARIES})
 
 # Main executable
 add_executable(gara-image src/main.cpp)

@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libcurl4-openssl-dev \
     libsqlite3-dev \
+    libmysqlclient-dev \
     libvips-dev \
     libglib2.0-dev \
     ca-certificates \
@@ -40,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     libstdc++6 \
     libsqlite3-0 \
+    libmysqlclient21 \
     libvips42t64 \
     ca-certificates \
     curl \
@@ -48,8 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the built binary from builder stage
 COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
 
-# Copy database schema
+# Copy database schemas
 COPY --from=builder /app/src/db/schema.sql /app/src/db/schema.sql
+COPY --from=builder /app/src/db/schema_mysql.sql /app/src/db/schema_mysql.sql
 
 # Create non-root user and data directories
 RUN groupadd -g 10000 crowuser && useradd -u 10000 -g crowuser -s /usr/sbin/nologin crowuser && \
