@@ -1,4 +1,5 @@
 name: Tests
+# Build and test on Ubuntu and macOS
 
 on:
   push:
