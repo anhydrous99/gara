@@ -36,11 +36,28 @@ option(ENABLE_MYSQL "Enable MySQL database support" ON)
 if(ENABLE_MYSQL)
     pkg_check_modules(MYSQL mysqlclient)
     if(MYSQL_FOUND)
-        message(STATUS "MySQL support enabled")
+        message(STATUS "MySQL support enabled via pkg-config")
         message(STATUS "  MYSQL_INCLUDE_DIRS: ${MYSQL_INCLUDE_DIRS}")
         message(STATUS "  MYSQL_LIBRARY_DIRS: ${MYSQL_LIBRARY_DIRS}")
         message(STATUS "  MYSQL_LIBRARIES: ${MYSQL_LIBRARIES}")
         message(STATUS "  MYSQL_CFLAGS: ${MYSQL_CFLAGS}")
+
+        # On macOS, MYSQL_INCLUDE_DIRS may be empty, try to find it manually
+        if(NOT MYSQL_INCLUDE_DIRS AND APPLE)
+            # Try Homebrew locations
+            find_path(MYSQL_INCLUDE_DIR mysql/mysql.h
+                HINTS
+                    /opt/homebrew/opt/mysql-client/include
+                    /usr/local/opt/mysql-client/include
+                    /opt/homebrew/include
+                    /usr/local/include
+            )
+            if(MYSQL_INCLUDE_DIR)
+                set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR})
+                message(STATUS "  Found MySQL headers at: ${MYSQL_INCLUDE_DIRS}")
+            endif()
+        endif()
+
         add_definitions(-DGARA_MYSQL_SUPPORT)
     else()
         message(WARNING "MySQL client library not found, MySQL support disabled")
