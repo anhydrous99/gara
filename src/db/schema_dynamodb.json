@@ -1,0 +1,74 @@
+{
+  "albums_table": {
+    "TableName": "gara_albums",
+    "KeySchema": [
+      {
+        "AttributeName": "album_id",
+        "KeyType": "HASH"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "album_id",
+        "AttributeType": "S"
+      }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Tags": [
+      {
+        "Key": "Application",
+        "Value": "gara-image"
+      }
+    ]
+  },
+  "images_table": {
+    "TableName": "gara_images",
+    "KeySchema": [
+      {
+        "AttributeName": "image_id",
+        "KeyType": "HASH"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "image_id",
+        "AttributeType": "S"
+      }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Tags": [
+      {
+        "Key": "Application",
+        "Value": "gara-image"
+      }
+    ]
+  },
+  "attribute_schema": {
+    "albums": {
+      "album_id": {"type": "S", "description": "Unique album identifier"},
+      "name": {"type": "S", "description": "Album name (unique)"},
+      "description": {"type": "S", "description": "Album description"},
+      "cover_image_id": {"type": "S", "description": "SHA256 hash of cover image"},
+      "image_ids": {"type": "S", "description": "JSON array of image SHA256 hashes"},
+      "tags": {"type": "S", "description": "JSON array of tag strings"},
+      "published": {"type": "BOOL", "description": "Whether album is publicly visible"},
+      "created_at": {"type": "N", "description": "Unix timestamp of creation"},
+      "updated_at": {"type": "N", "description": "Unix timestamp of last update"}
+    },
+    "images": {
+      "image_id": {"type": "S", "description": "SHA256 hash of original image (64 chars)"},
+      "name": {"type": "S", "description": "Original filename without extension"},
+      "original_format": {"type": "S", "description": "Original file format (jpeg, png, gif, tiff, webp)"},
+      "size": {"type": "N", "description": "File size in bytes"},
+      "width": {"type": "N", "description": "Image width in pixels"},
+      "height": {"type": "N", "description": "Image height in pixels"},
+      "uploaded_at": {"type": "N", "description": "Unix timestamp of upload"}
+    }
+  },
+  "cli_commands": {
+    "create_albums_table": "aws dynamodb create-table --cli-input-json file://schema_dynamodb.json --query albums_table",
+    "create_images_table": "aws dynamodb create-table --cli-input-json file://schema_dynamodb.json --query images_table",
+    "delete_albums_table": "aws dynamodb delete-table --table-name gara_albums",
+    "delete_images_table": "aws dynamodb delete-table --table-name gara_images"
+  }
+}

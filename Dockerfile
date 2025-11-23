@@ -1,6 +1,9 @@
 # Builder stage
 FROM ubuntu:24.04 AS builder
 
+# Build arguments for optional features
+ARG ENABLE_DYNAMODB=OFF
+
 WORKDIR /app
 
 # Install build dependencies
@@ -19,17 +22,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Install AWS SDK if DynamoDB support is enabled
+RUN if [ "$ENABLE_DYNAMODB" = "ON" ]; then \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libaws-cpp-sdk-core-dev \
+        libaws-cpp-sdk-dynamodb-dev \
+    && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY . .
 
 RUN mkdir -p build && \
     cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_STATIC=OFF && \
+    cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_STATIC=OFF -DENABLE_DYNAMODB=${ENABLE_DYNAMODB} && \
     make -j$(nproc) && \
     make install && \
     strip --strip-unneeded /usr/local/bin/gara-image
 
 # Runtime stage
 FROM ubuntu:24.04
+
+# Build arguments for optional features (must redeclare in new stage)
+ARG ENABLE_DYNAMODB=OFF
 
 WORKDIR /app
 
@@ -47,12 +61,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install AWS SDK runtime libraries if DynamoDB support is enabled
+RUN if [ "$ENABLE_DYNAMODB" = "ON" ]; then \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libaws-cpp-sdk-core \
+        libaws-cpp-sdk-dynamodb \
+    && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Copy the built binary from builder stage
 COPY --from=builder /usr/local/bin/gara-image /usr/local/bin/gara-image
 
 # Copy database schemas
 COPY --from=builder /app/src/db/schema.sql /app/src/db/schema.sql
 COPY --from=builder /app/src/db/schema_mysql.sql /app/src/db/schema_mysql.sql
+COPY --from=builder /app/src/db/schema_dynamodb.json /app/src/db/schema_dynamodb.json
 
 # Create non-root user and data directories
 RUN groupadd -g 10000 crowuser && useradd -u 10000 -g crowuser -s /usr/sbin/nologin crowuser && \

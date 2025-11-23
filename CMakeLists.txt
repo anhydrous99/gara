@@ -77,6 +77,21 @@ if(ENABLE_MYSQL)
         set(ENABLE_MYSQL OFF)
     endif()
 endif()
+# DynamoDB support (optional)
+option(ENABLE_DYNAMODB "Enable DynamoDB database support" OFF)
+if(ENABLE_DYNAMODB)
+    find_package(AWSSDK COMPONENTS dynamodb)
+    if(AWSSDK_FOUND)
+        message(STATUS "DynamoDB support enabled via AWS SDK")
+        message(STATUS "  AWS SDK version: ${AWSSDK_VERSION}")
+        message(STATUS "  AWS SDK libraries: ${AWSSDK_LINK_LIBRARIES}")
+        add_definitions(-DGARA_DYNAMODB_SUPPORT)
+    else()
+        message(WARNING "AWS SDK not found, DynamoDB support disabled")
+        set(ENABLE_DYNAMODB OFF)
+    endif()
+endif()
+
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(GOBJECT REQUIRED gobject-2.0)
 pkg_check_modules(VIPS REQUIRED vips-cpp)
@@ -159,6 +174,11 @@ if(ENABLE_MYSQL AND MYSQL_FOUND)
     list(APPEND GARA_LIB_SOURCES src/db/mysql_client.cpp)
 endif()
 
+# Add DynamoDB client source if DynamoDB support is enabled
+if(ENABLE_DYNAMODB AND AWSSDK_FOUND)
+    list(APPEND GARA_LIB_SOURCES src/db/dynamodb_client.cpp)
+endif()
+
 add_library(gara_lib ${GARA_LIB_SOURCES})
 
 target_include_directories(gara_lib PUBLIC
@@ -208,6 +228,11 @@ set(GARA_LINK_LIBRARIES
 # Add MySQL libraries if available
 if(ENABLE_MYSQL AND MYSQL_FOUND)
     list(APPEND GARA_LINK_LIBRARIES ${MYSQL_LIBRARIES})
+endif()
+
+# Add AWS SDK libraries if available
+if(ENABLE_DYNAMODB AND AWSSDK_FOUND)
+    list(APPEND GARA_LINK_LIBRARIES ${AWSSDK_LINK_LIBRARIES})
 endif()
 
 target_link_libraries(gara_lib PUBLIC ${GARA_LINK_LIBRARIES})

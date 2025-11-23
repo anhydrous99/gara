@@ -17,6 +17,9 @@
 #ifdef GARA_MYSQL_SUPPORT
 #include "db/mysql_client.h"
 #endif
+#ifdef GARA_DYNAMODB_SUPPORT
+#include "db/dynamodb_client.h"
+#endif
 #include "controllers/image_controller.h"
 #include "controllers/album_controller.h"
 #include "models/watermark_config.h"
@@ -111,6 +114,26 @@ int main() {
             LOG_INFO("MySQL database initialized successfully");
 #else
             LOG_CRITICAL("MySQL support not compiled in. Rebuild with ENABLE_MYSQL=ON");
+            return 1;
+#endif
+        } else if (db_type == "dynamodb") {
+#ifdef GARA_DYNAMODB_SUPPORT
+            auto dynamodb_config = gara::DynamoDBConfig::fromEnvironment();
+            gara::Logger::log_structured(spdlog::level::info, "DynamoDB configuration", {
+                {"region", dynamodb_config.region},
+                {"endpoint_url", dynamodb_config.endpoint_url.empty() ? "(default)" : dynamodb_config.endpoint_url},
+                {"albums_table", dynamodb_config.albums_table},
+                {"images_table", dynamodb_config.images_table}
+            });
+            auto dynamodb_client = std::make_shared<gara::DynamoDBClient>(dynamodb_config);
+            if (!dynamodb_client->initialize()) {
+                LOG_CRITICAL("Failed to initialize DynamoDB tables");
+                return 1;
+            }
+            db_client = dynamodb_client;
+            LOG_INFO("DynamoDB database initialized successfully");
+#else
+            LOG_CRITICAL("DynamoDB support not compiled in. Rebuild with ENABLE_DYNAMODB=ON");
             return 1;
 #endif
         } else {

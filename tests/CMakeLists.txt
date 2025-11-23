@@ -12,6 +12,7 @@ set(TEST_SOURCES
     error_handling_test.cpp
     integration_test.cpp
     db/mysql_client_test.cpp
+    db/dynamodb_client_test.cpp
 )
 
 add_executable(gara_tests ${TEST_SOURCES})
